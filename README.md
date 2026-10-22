@@ -45,6 +45,137 @@ Each person owns one part of the system and becomes the expert on the Section A 
 
 Role 3 should keep the sandbox very simple at first: one container, run the code, capture the logs. Everyone needs it later, so it must not become a bottleneck.
 
+## Role breakdowns
+
+Each role's tasks are grouped by the four steps in [Order of work](#order-of-work). Tick them off as you go.
+
+### Role 1: Interface & Requirements
+
+**Step 1: Agree and set up**
+
+- [ ] Help define the spec format, especially the parts the user will see
+- [ ] Write the golden example's chat transcript (user describing the clinic system, agent asking questions)
+
+**Step 2: Build alone**
+
+- [ ] Pick a simple UI stack (e.g. Streamlit or a basic React page) and agree it with the group
+- [ ] Build the chat screen that sends messages to the backend and shows replies
+- [ ] Write the requirements agent's prompt: plain language, one clarifying question at a time, no jargon
+- [ ] Define when it stops: it outputs a requirements summary in the agreed format
+- [ ] Add short-term memory: keep the chat history, and summarise it when it gets long
+- [ ] Add guardrails: stay on topic, flag unsafe requests (e.g. storing passwords in plain text)
+- [ ] Build the spec approval screen: data, endpoints and permissions shown in plain English, with Approve and Request change buttons
+- [ ] Build the "try it" panel so a user can test the finished API with simple actions
+- [ ] Test everything using the golden example as fake input
+
+**Step 3: Connect the parts**
+
+- [ ] Connect the UI and requirements agent to the orchestrator (pair with Role 2)
+- [ ] Show the user which agent is working and what stage the build is at
+
+**Step 4: Evaluate and write up**
+
+- [ ] Run the usability test with 3–5 non-developers and collect SUS scores and notes
+- [ ] Record how many clarifying turns each benchmark scenario needed
+- [ ] Write the Section B part on the interface and human-in-the-loop design
+- [ ] Plan the live demo flow for the presentation
+
+### Role 2: Orchestrator & Architect
+
+**Step 1: Agree and set up**
+
+- [ ] Lead the agreement on the project state and agent formats
+- [ ] Write the golden example's spec
+
+**Step 2: Build alone**
+
+- [ ] Build the orchestrator loop: requirements → architect → user approval → coder ↔ tester → deploy
+- [ ] Add stop rules: a maximum number of fix attempts, and what happens when it's reached
+- [ ] Log every step (agent, input, output, tokens, time) so Role 4 can measure it
+- [ ] Build the architect agent: turns the requirements summary into a spec using structured output
+- [ ] Check every spec against the agreed schema and reject invalid ones
+- [ ] Break the approved spec into small build tasks for the coder (one per entity or endpoint group)
+- [ ] Handle "request change" from the approval screen by updating the spec
+- [ ] Build a single-agent mode (one agent does everything) for the comparison test
+
+**Step 3: Connect the parts**
+
+- [ ] Wire all four agents together (pair with Roles 1 and 3)
+- [ ] Run the full pipeline end to end on the golden example
+
+**Step 4: Evaluate and write up**
+
+- [ ] Compare the architect's specs with the reference specs for the benchmark scenarios
+- [ ] Give Role 4 the logs for token, time and step counts
+- [ ] Draw the architecture diagram for Section B and the slides
+
+### Role 3: Coder & Sandbox
+
+**Step 1: Agree and set up**
+
+- [ ] Write the golden example's FastAPI code
+- [ ] Set up the repo folder structure and a base Docker image
+
+**Step 2: Build alone**
+
+- [ ] Build the sandbox: a Docker container that runs generated code and returns the logs, with time and memory limits
+- [ ] Build the tools: write file, read file, run server, run tests, read logs
+- [ ] Describe each tool in the agreed MCP-compatible format
+- [ ] Build the coder's ReAct loop: thought → tool call → observation, with a step limit
+- [ ] Write the coder prompt: build exactly what the approved spec says, with safe defaults (login on write endpoints, input checks, secrets in environment variables)
+- [ ] Check that the generated API's OpenAPI output matches the approved spec
+- [ ] Build the MCP server that lets a frontend agent read the finished API's spec
+- [ ] Write down the security risks (prompt injection, secrets, unsafe code) and how we handle each
+
+**Step 3: Connect the parts**
+
+- [ ] Connect the coder and tester feedback loop (pair with Role 4)
+- [ ] Connect the coder to the orchestrator (pair with Role 2)
+
+**Step 4: Evaluate and write up**
+
+- [ ] Run the security checklist on each benchmark scenario
+- [ ] Report the build success rate
+- [ ] Write the Section B part on the coder, sandbox and security
+
+### Role 4: Tester, RAG & Evaluation
+
+**Step 1: Agree and set up**
+
+- [ ] Write the golden example's test suite
+- [ ] Write 15–30 benchmark scenarios as plain-language requests (clinic, library, church register, small shop)
+- [ ] Write a hidden test suite for each scenario
+
+**Step 2: Build alone**
+
+- [ ] Build the tester agent: writes tests from the spec, runs them in the sandbox, and explains failures to the coder
+- [ ] Agree the failure-report format with Role 3
+- [ ] Build RAG: collect code patterns (login, pagination, relationships) and FastAPI docs, split them into chunks, embed and search them
+- [ ] Give the coder a search tool for that pattern library
+- [ ] Set up spec checking with Schemathesis
+- [ ] Build the evaluation script: runs every scenario and saves the results to a CSV
+- [ ] Run the base vs instruction-tuned model experiment
+
+**Step 3: Connect the parts**
+
+- [ ] Connect the tester and coder loop (pair with Role 3)
+
+**Step 4: Evaluate and write up**
+
+- [ ] Run the benchmark on the full system
+- [ ] Run the comparisons: no tester, single agent, no RAG
+- [ ] Make the results tables and charts
+- [ ] Write the Section B evaluation part
+
+### Everyone
+
+- [ ] Teach your theory topic in a 20-minute session
+- [ ] Review your teammate's code (review ring)
+- [ ] Present your part at each weekly teach-back
+- [ ] Write your own Section A
+- [ ] Present your part in the 10-minute presentation
+- [ ] Be able to explain every part of the system for the viva
+
 ## Theory-only topics
 
 Some Section A topics are about how the model was trained, so we won't build them. Each person reads up on one and teaches it to the group in a 20-minute session.
