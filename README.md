@@ -1,220 +1,233 @@
-# PROSIT 2: Non-Developer Friendly API Development Platform
+# PROSIT 2: Non-Developer Friendly API Platform
 
-**ICS554 Natural Language Processing** · Master's in Intelligent Computing Systems, Ashesi University · Group 3
+ICS554 Natural Language Processing · Ashesi MSc Intelligent Computing Systems · Group 3
 
-A tool where a non-developer describes a backend in plain words, and a team of AI agents builds, tests and runs the API for them. Built around Mesora's principle that frontends and backends should be independent and communicate through a well-defined API.
+A non-developer describes a backend in plain words. A team of AI agents builds, tests and runs the API.
+
+```
+User ──► Requirements ──► Architect ──► [User approves spec] ──► Coder ◄──► Tester ──► Running API + docs
+```
+
+**Rule:** agree on how the parts talk to each other first, then build separately. No one waits on anyone.
 
 ---
 
-## What we're building
+## What is an agent?
 
-The system has four agents that pass work along a line:
+A plain LLM only takes text in and gives text out. An **agent** is an LLM placed in a loop where it can take actions and see the results:
 
-1. **Requirements agent** chats with the user and asks clarifying questions.
-2. **Architect agent** turns the answers into a project spec (the data, the endpoints, who can do what). The user approves it.
-3. **Coder agent** writes the FastAPI code from the approved spec.
-4. **Tester agent** tests the code and sends failures back to the coder to fix.
+| Part | What it is |
+| --- | --- |
+| Goal | What the agent is trying to get done |
+| LLM | Decides the next step |
+| Tools | Functions it can call (write a file, run tests, search docs) |
+| Memory | What it has done and seen so far |
+| Stop rule | When it's finished, or when it gives up |
+
+### How it works
+
+The agent repeats a **Thought → Action → Observation** loop (ReAct):
+
+```python
+history = [goal]
+for step in range(MAX_STEPS):
+    thought, action = llm(history)       # decide what to do next
+    if action.name == "finish":
+        break
+    observation = run_tool(action)       # do it, get the result
+    history += [thought, action, observation]
+```
+
+Example from our coder agent:
 
 ```
-User ──► Requirements ──► Architect ──► [User approves spec] ──► Coder ◄──► Tester ──► Running API + OpenAPI docs
+Thought:     The spec needs a Patient model. I'll create it.
+Action:      write_file("models.py", ...)
+Observation: File saved.
+Thought:     Now run the tests.
+Action:      run_tests()
+Observation: 2 failed: POST /appointments returns 500.
+Thought:     The date field isn't parsed. Fix the schema.
+...
 ```
 
-**The one big rule:** we agree on how the parts talk to each other first, then everyone builds their part separately. Nobody should have to wait for someone else's code to start working.
+The LLM never runs code itself. It asks for a tool call, our code runs it, and the result goes back into the next prompt.
 
-## Day 1: what we agree on together
+### How it ties into our project
 
-Before anyone codes, all four of us agree on:
+Our platform is four agents, each running its own loop, coordinated by an orchestrator.
 
-1. **The project spec format.** One shared data structure (JSON/Pydantic) listing the data, endpoints and permissions. Every agent reads and updates this.
-2. **The agent format.** Every agent takes the current project state in and gives an updated state plus a log of what it did out. Same shape for all four.
-3. **The tool format.** How a tool is described and called: its name, its inputs, its output. Kept MCP-compatible.
-4. **One golden example.** A hand-written fake project, a clinic appointment system: the chat, the spec, working FastAPI code and a test suite.
+| Agent | Goal | Tools | Done when |
+| --- | --- | --- | --- |
+| Requirements | Understand what the user wants | Ask user a question | Requirements summary is complete |
+| Architect | Turn requirements into a spec | Validate spec against schema | User approves the spec |
+| Coder | Build the API from the spec | Write/read file, run server, read logs, search pattern library (RAG) | Code runs and matches the spec |
+| Tester | Find bugs | Write tests, run tests | All tests pass, or max fix attempts reached |
 
-The golden example is what stops us from blocking each other. Each person uses the parts of it they need as fake input, so they can build and test their piece straight away.
+- **Orchestrator:** decides which agent runs next and passes the project state between them.
+- **Shared memory:** the project spec. Every agent reads and updates it.
+- **Human-in-the-loop:** the user approves the spec before any code is written.
+- **Self-reflection:** the tester's failure reports send the coder back into its loop.
+- **MCP:** tools are described in a standard format, and the finished API is exposed so a frontend agent (e.g. Lovable) can use it.
 
-## The four roles
+---
 
-Each person owns one part of the system and becomes the expert on the Section A topics that part uses. Add your name next to your role.
+## Day 1: agree together
 
-| Role | Member | What you build | Section A topics you own | What you start from |
+1. **Spec format:** one JSON/Pydantic structure for data, endpoints and permissions.
+2. **Agent format:** every agent takes project state in, returns updated state + a log.
+3. **Tool format:** name, inputs, output. MCP-compatible.
+4. **Golden example:** a hand-written clinic appointment project (chat, spec, FastAPI code, tests). Everyone uses it as fake input to build their part independently.
+
+## Roles
+
+| Role | Member | Builds | Section A topics owned | Starts from |
 | --- | --- | --- | --- | --- |
-| **1. Interface & Requirements** | | Chat screen, requirements agent, plain-language spec approval screen, "try it" panel | Human-in-the-loop, prompt engineering & chain-of-thought, memory, alignment (guardrails) | Golden example's chat and spec |
-| **2. Orchestrator & Architect** | | Control loop that decides which agent runs next, and the architect agent that writes the spec | Orchestration, multi-agent systems, agentic AI, reasoning & planning, decomposition | Golden example's chat |
-| **3. Coder & Sandbox** | | Coder agent's ReAct loop, its tools (write file, run server, read logs), Docker sandbox, MCP server for frontend handoff | Coding agents, ReAct / perceive-plan-act, tool use, MCP, privacy & security | Golden example's spec |
-| **4. Tester, RAG & Evaluation** | | Tester agent and its feedback to the coder, RAG over code patterns and docs, benchmark and comparison runs | Self-reflection, RAG, evaluation | Golden example's code and tests |
-
-Role 3 should keep the sandbox very simple at first: one container, run the code, capture the logs. Everyone needs it later, so it must not become a bottleneck.
-
-## Role breakdowns
-
-Each role's tasks are grouped by the four steps in [Order of work](#order-of-work). Tick them off as you go.
+| 1. Interface & Requirements | | Chat UI, requirements agent, spec approval screen, "try it" panel | Human-in-the-loop, prompt engineering & CoT, memory, alignment | Golden chat + spec |
+| 2. Orchestrator & Architect | | Orchestrator loop, architect agent | Orchestration, multi-agent, agentic AI, reasoning & planning, decomposition | Golden chat |
+| 3. Coder & Sandbox | | Coder ReAct loop, tools, Docker sandbox, MCP server | Coding agents, ReAct, tool use, MCP, privacy & security | Golden spec |
+| 4. Tester, RAG & Evaluation | | Tester agent, RAG, benchmark, comparisons | Self-reflection, RAG, evaluation | Golden code + tests |
 
 ### Role 1: Interface & Requirements
 
-**Step 1: Agree and set up**
+**Set up**
+- [ ] Help define the user-facing parts of the spec
+- [ ] Write the golden example chat transcript
 
-- [ ] Help define the spec format, especially the parts the user will see
-- [ ] Write the golden example's chat transcript (user describing the clinic system, agent asking questions)
+**Build**
+- [ ] Pick a simple UI stack (Streamlit or basic React)
+- [ ] Chat screen
+- [ ] Requirements agent prompt: plain language, one question at a time
+- [ ] Output a requirements summary in the agreed format
+- [ ] Short-term memory: chat history + summary when long
+- [ ] Guardrails: stay on topic, flag unsafe requests
+- [ ] Spec approval screen: plain-English view with Approve / Request change
+- [ ] "Try it" panel for testing the finished API
 
-**Step 2: Build alone**
+**Connect**
+- [ ] Connect to the orchestrator (with Role 2)
+- [ ] Show build progress to the user
 
-- [ ] Pick a simple UI stack (e.g. Streamlit or a basic React page) and agree it with the group
-- [ ] Build the chat screen that sends messages to the backend and shows replies
-- [ ] Write the requirements agent's prompt: plain language, one clarifying question at a time, no jargon
-- [ ] Define when it stops: it outputs a requirements summary in the agreed format
-- [ ] Add short-term memory: keep the chat history, and summarise it when it gets long
-- [ ] Add guardrails: stay on topic, flag unsafe requests (e.g. storing passwords in plain text)
-- [ ] Build the spec approval screen: data, endpoints and permissions shown in plain English, with Approve and Request change buttons
-- [ ] Build the "try it" panel so a user can test the finished API with simple actions
-- [ ] Test everything using the golden example as fake input
-
-**Step 3: Connect the parts**
-
-- [ ] Connect the UI and requirements agent to the orchestrator (pair with Role 2)
-- [ ] Show the user which agent is working and what stage the build is at
-
-**Step 4: Evaluate and write up**
-
-- [ ] Run the usability test with 3–5 non-developers and collect SUS scores and notes
-- [ ] Record how many clarifying turns each benchmark scenario needed
-- [ ] Write the Section B part on the interface and human-in-the-loop design
-- [ ] Plan the live demo flow for the presentation
+**Evaluate**
+- [ ] Usability test with 3–5 non-developers (SUS scores)
+- [ ] Count clarifying turns per scenario
+- [ ] Section B: interface and human-in-the-loop
 
 ### Role 2: Orchestrator & Architect
 
-**Step 1: Agree and set up**
+**Set up**
+- [ ] Lead the project state and agent format
+- [ ] Write the golden example spec
 
-- [ ] Lead the agreement on the project state and agent formats
-- [ ] Write the golden example's spec
+**Build**
+- [ ] Orchestrator: requirements → architect → approval → coder ↔ tester → deploy
+- [ ] Stop rules: max fix attempts and fallback
+- [ ] Log every step (agent, input, output, tokens, time)
+- [ ] Architect agent: requirements → spec via structured output
+- [ ] Validate specs against the schema
+- [ ] Split the spec into build tasks for the coder
+- [ ] Handle "request change" from the approval screen
+- [ ] Single-agent mode for comparison
 
-**Step 2: Build alone**
+**Connect**
+- [ ] Wire all agents (with Roles 1 and 3)
+- [ ] Full pipeline run on the golden example
 
-- [ ] Build the orchestrator loop: requirements → architect → user approval → coder ↔ tester → deploy
-- [ ] Add stop rules: a maximum number of fix attempts, and what happens when it's reached
-- [ ] Log every step (agent, input, output, tokens, time) so Role 4 can measure it
-- [ ] Build the architect agent: turns the requirements summary into a spec using structured output
-- [ ] Check every spec against the agreed schema and reject invalid ones
-- [ ] Break the approved spec into small build tasks for the coder (one per entity or endpoint group)
-- [ ] Handle "request change" from the approval screen by updating the spec
-- [ ] Build a single-agent mode (one agent does everything) for the comparison test
-
-**Step 3: Connect the parts**
-
-- [ ] Wire all four agents together (pair with Roles 1 and 3)
-- [ ] Run the full pipeline end to end on the golden example
-
-**Step 4: Evaluate and write up**
-
-- [ ] Compare the architect's specs with the reference specs for the benchmark scenarios
-- [ ] Give Role 4 the logs for token, time and step counts
-- [ ] Draw the architecture diagram for Section B and the slides
+**Evaluate**
+- [ ] Compare generated specs with reference specs
+- [ ] Hand logs to Role 4
+- [ ] Architecture diagram for Section B and slides
 
 ### Role 3: Coder & Sandbox
 
-**Step 1: Agree and set up**
+**Set up**
+- [ ] Write the golden example FastAPI code
+- [ ] Repo structure and base Docker image
 
-- [ ] Write the golden example's FastAPI code
-- [ ] Set up the repo folder structure and a base Docker image
+**Build**
+- [ ] Sandbox: Docker container with time/memory limits, returns logs
+- [ ] Tools: write file, read file, run server, run tests, read logs
+- [ ] Tool descriptions in MCP-compatible format
+- [ ] Coder ReAct loop with step limit
+- [ ] Coder prompt with safe defaults (auth on writes, input checks, secrets in env vars)
+- [ ] Check generated OpenAPI matches the spec
+- [ ] MCP server exposing the finished API spec
+- [ ] Document security risks and mitigations
 
-**Step 2: Build alone**
+**Connect**
+- [ ] Coder ↔ tester loop (with Role 4)
+- [ ] Connect to orchestrator (with Role 2)
 
-- [ ] Build the sandbox: a Docker container that runs generated code and returns the logs, with time and memory limits
-- [ ] Build the tools: write file, read file, run server, run tests, read logs
-- [ ] Describe each tool in the agreed MCP-compatible format
-- [ ] Build the coder's ReAct loop: thought → tool call → observation, with a step limit
-- [ ] Write the coder prompt: build exactly what the approved spec says, with safe defaults (login on write endpoints, input checks, secrets in environment variables)
-- [ ] Check that the generated API's OpenAPI output matches the approved spec
-- [ ] Build the MCP server that lets a frontend agent read the finished API's spec
-- [ ] Write down the security risks (prompt injection, secrets, unsafe code) and how we handle each
-
-**Step 3: Connect the parts**
-
-- [ ] Connect the coder and tester feedback loop (pair with Role 4)
-- [ ] Connect the coder to the orchestrator (pair with Role 2)
-
-**Step 4: Evaluate and write up**
-
-- [ ] Run the security checklist on each benchmark scenario
-- [ ] Report the build success rate
-- [ ] Write the Section B part on the coder, sandbox and security
+**Evaluate**
+- [ ] Security checklist per scenario
+- [ ] Build success rate
+- [ ] Section B: coder, sandbox, security
 
 ### Role 4: Tester, RAG & Evaluation
 
-**Step 1: Agree and set up**
+**Set up**
+- [ ] Write the golden example tests
+- [ ] Write 15–30 benchmark scenarios
+- [ ] Write hidden tests for each scenario
 
-- [ ] Write the golden example's test suite
-- [ ] Write 15–30 benchmark scenarios as plain-language requests (clinic, library, church register, small shop)
-- [ ] Write a hidden test suite for each scenario
+**Build**
+- [ ] Tester agent: tests from spec, runs them, explains failures
+- [ ] Agree failure-report format with Role 3
+- [ ] RAG: pattern library + FastAPI docs, chunked and embedded
+- [ ] Search tool for the coder
+- [ ] Spec checking with Schemathesis
+- [ ] Evaluation script that saves results to CSV
+- [ ] Base vs instruction-tuned model experiment
 
-**Step 2: Build alone**
+**Connect**
+- [ ] Tester ↔ coder loop (with Role 3)
 
-- [ ] Build the tester agent: writes tests from the spec, runs them in the sandbox, and explains failures to the coder
-- [ ] Agree the failure-report format with Role 3
-- [ ] Build RAG: collect code patterns (login, pagination, relationships) and FastAPI docs, split them into chunks, embed and search them
-- [ ] Give the coder a search tool for that pattern library
-- [ ] Set up spec checking with Schemathesis
-- [ ] Build the evaluation script: runs every scenario and saves the results to a CSV
-- [ ] Run the base vs instruction-tuned model experiment
-
-**Step 3: Connect the parts**
-
-- [ ] Connect the tester and coder loop (pair with Role 3)
-
-**Step 4: Evaluate and write up**
-
+**Evaluate**
 - [ ] Run the benchmark on the full system
-- [ ] Run the comparisons: no tester, single agent, no RAG
-- [ ] Make the results tables and charts
-- [ ] Write the Section B evaluation part
+- [ ] Comparisons: no tester, single agent, no RAG
+- [ ] Results tables and charts
+- [ ] Section B: evaluation
 
 ### Everyone
 
-- [ ] Teach your theory topic in a 20-minute session
-- [ ] Review your teammate's code (review ring)
-- [ ] Present your part at each weekly teach-back
+- [ ] Teach your theory topic (below)
+- [ ] Review a teammate's code each week
+- [ ] Present at the weekly teach-back
 - [ ] Write your own Section A
-- [ ] Present your part in the 10-minute presentation
-- [ ] Be able to explain every part of the system for the viva
+- [ ] Present your part in the presentation
+- [ ] Be able to explain the whole system for the viva
 
-## Theory-only topics
+## Theory topics (taught, not built)
 
-Some Section A topics are about how the model was trained, so we won't build them. Each person reads up on one and teaches it to the group in a 20-minute session.
-
-| Topic | Who teaches it |
+| Topic | Teaches |
 | --- | --- |
 | Instruction tuning | Role 1 |
 | Preference-based learning (incl. DPO) | Role 2 |
 | RLHF | Role 3 |
 | LLM alignment | Role 4 |
 
-Role 4 also runs one small experiment: send the same request to a base model and an instruction-tuned model, and show the difference.
+## Working rules
 
-## How everyone learns everything
-
-The viva is individual, so each of us must be able to explain the whole system.
-
-- **Review ring.** 1 reviews 2, 2 reviews 3, 3 reviews 4, 4 reviews 1. Halfway through, switch: 1 reviews 3, 2 reviews 4, 3 reviews 1, 4 reviews 2.
-- **Weekly teach-back.** Each owner explains their part in 10 minutes; the others ask viva-style questions ("why does the loop stop here?", "what happens if a tool call fails?").
-- **Pair when connecting parts.** When two parts are joined, both owners work on it together.
-- **Section A stays individual.** Share reading lists and notes, but each person writes Section A in their own words. Section B is the same for all of us.
+- **Review ring:** 1 → 2 → 3 → 4 → 1, then switch halfway (1 → 3, 2 → 4, 3 → 1, 4 → 2).
+- **Weekly teach-back:** 10 minutes per owner, others ask viva-style questions.
+- **Pair** when connecting two parts.
+- **Section A** is individual, in your own words. **Section B** is shared.
 
 ## Order of work
 
-1. **Agree and set up (all four, 1–2 sessions).** Agree on the Day 1 items and write the golden example.
-2. **Build alone.** Each part runs on its own from the command line using the golden example as input. Role 4 writes the benchmark scenarios and hidden tests here, since they depend on no one.
-3. **Connect the parts.** First in pairs (requirements → architect, coder ↔ tester), then the full pipeline from chat to running API.
-4. **Evaluate and write up.** Run the benchmark, run the comparisons (with/without tester, one agent vs many, with/without RAG), and test with 3–5 non-developers. Results go into Section B and the presentation.
+1. **Set up** (all four): Day 1 agreements and golden example.
+2. **Build alone:** each part runs on its own using the golden example.
+3. **Connect:** pairs first, then the full pipeline.
+4. **Evaluate:** benchmark, comparisons, usability test, write-up.
 
 ## Checklist
 
 - [x] Create the GitHub repo
-- [ ] Everyone picks a role and adds their name to the roles table
-- [ ] Confirm the deadline and set dates for each step
-- [ ] Agree on the spec, agent and tool formats
-- [ ] Write the golden example (clinic appointment system)
-- [ ] Book the theory teach-back sessions
-- [ ] Set a weekly teach-back time
-- [ ] Each part runs on its own
+- [ ] Assign roles
+- [ ] Confirm deadline and set dates
+- [ ] Day 1 agreements
+- [ ] Golden example
+- [ ] Each part runs alone
 - [ ] Full pipeline runs end to end
-- [ ] Benchmark and comparison results ready
-- [ ] Section B written, slides done (repo link on page 1 of both the report and slides)
+- [ ] Results ready
+- [ ] Section B and slides done (repo link on page 1 of both)
