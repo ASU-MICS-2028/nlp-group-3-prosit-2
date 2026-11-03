@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prosit Builder</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="window">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="brand" aria-label="Prosit Builder"><span class="logo" data-icon="logo"></span><span class="brand-name">Prosit<b>Builder</b></span></div>
+      <nav class="nav" aria-label="Main">
+        <button class="nav-item" data-view="home"><i data-icon="home"></i><span>Home</span></button>
+        <button class="nav-item" data-view="files"><i data-icon="folder"></i><span>Files</span></button>
+        <button class="nav-item" data-view="map"><i data-icon="network"></i><span>Map</span></button>
+        <button class="nav-item" data-view="tests"><i data-icon="flask"></i><span>Tests</span></button>
+        <button class="nav-item" data-view="search"><i data-icon="search"></i><span>Search</span></button>
+        <button class="nav-item" data-view="activity"><i data-icon="activity"></i><span>Activity</span></button>
+        <button class="nav-item" data-view="run"><i data-icon="play"></i><span>Run</span></button>
+        <button class="nav-item" data-view="settings"><i data-icon="settings"></i><span>Settings</span></button>
+      </nav>
+      <button class="user" id="user" title="Settings">
+        <span class="avatar" id="avatar">?</span>
+        <span class="user-name" id="user-name"></span>
+        <i data-icon="chevronDown" class="muted-icon"></i>
+      </button>
+    </aside>
+
+    <!-- Right of sidebar -->
+    <div class="main-area">
+      <header class="topbar">
+        <div class="project-picker">
+          <button class="project-btn" id="project-btn" aria-haspopup="menu">
+            <i data-icon="folder"></i><span id="project-name">New project</span><i data-icon="chevronDown" class="muted-icon"></i>
+          </button>
+          <div class="menu" id="project-menu" role="menu" hidden></div>
+        </div>
+        <div class="top-actions">
+          <a class="btn export-btn" id="export-btn" href="/api/export" download hidden><i data-icon="download"></i>Download code</a>
+          <button class="icon-btn" id="theme-btn" title="Toggle theme"><i data-icon="sun"></i></button>
+          <button class="icon-btn boxed" id="panel-btn" title="Toggle assistant"><i data-icon="panel"></i></button>
+        </div>
+      </header>
+
+      <div class="body">
+        <!-- Center -->
+        <section class="center" id="center">
+          <div class="view" id="view-home">
+            <div class="tabs" id="tabs"></div>
+            <div class="editor" id="editor"></div>
+            <footer class="statusbar" id="statusbar"></footer>
+          </div>
+          <div class="view" id="view-files" hidden></div>
+          <div class="view" id="view-map" hidden></div>
+          <div class="view" id="view-tests" hidden></div>
+          <div class="view" id="view-search" hidden></div>
+          <div class="view" id="view-activity" hidden></div>
+          <div class="view" id="view-run" hidden></div>
+          <div class="view" id="view-settings" hidden></div>
+        </section>
+
+        <!-- Assistant -->
+        <section class="assistant" id="assistant">
+          <div class="assistant-head">
+            <div class="assistant-tab"><i data-icon="logo" class="tab-logo"></i><span>Assistant</span>
+              <button class="icon-btn small" id="close-assistant" title="Close"><i data-icon="x"></i></button>
+            </div>
+          </div>
+          <div class="messages" id="messages"></div>
+          <form class="composer" id="composer">
+            <textarea id="input" rows="1" placeholder="Ask a question or describe what you want..."></textarea>
+            <div class="composer-row">
+              <button type="button" class="icon-btn" id="attach-btn" title="Attach a text file"><i data-icon="paperclip"></i></button>
+              <input type="file" id="attach" accept=".txt,.md,.json,.csv" hidden>
+              <button type="submit" class="send" id="send" title="Send"><i data-icon="arrowUp"></i></button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

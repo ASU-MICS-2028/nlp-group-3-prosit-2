@@ -1,0 +1,8 @@
+anthropic
+google-genai
+pydantic>=2
+fastapi
+uvicorn
+httpx
+pytest
+pywebview  # desktop window for the UI (python -m ui.desktop)
