@@ -335,10 +335,10 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 | Role | Member | Builds | Course topics owned | Theory topic taught | Starts from |
 | --- | --- | --- | --- | --- | --- |
-| 1. Interface & Requirements | | Gateway, UI, requirements agent, approval screen, "try it" panel | Human-in-the-loop, prompt engineering & CoT, memory, alignment | Instruction tuning | Golden chat + spec |
-| 2. Orchestrator & Architect | | Orchestrator, shared SDK setup, architect agent, logging | Orchestration, multi-agent, agentic AI, reasoning & planning, decomposition | Preference learning (incl. DPO) | Golden chat |
-| 3. Coder & Sandbox | | Coder agent, permissions and hooks, sandbox, SQLite volume, security | Coding agents, ReAct, tool use, MCP, privacy & security | RLHF | Golden spec |
-| 4. Tester, RAG & Evaluation | | Tester agent, RAG, benchmark, comparisons | Self-reflection, RAG, evaluation | LLM alignment | Golden code + tests |
+| 1. Interface & Requirements | Eugene Sewor | Gateway, UI, requirements agent, approval screen, "try it" panel | Human-in-the-loop, prompt engineering & CoT, memory, alignment | Instruction tuning | Golden chat + spec |
+| 2. Orchestrator & Architect | Henry Brandoh | Orchestrator, shared SDK setup, architect agent, logging | Orchestration, multi-agent, agentic AI, reasoning & planning, decomposition | Preference learning (incl. DPO) | Golden chat |
+| 3. Coder & Sandbox | Heny Olletey | Coder agent, permissions and hooks, sandbox, SQLite volume, security | Coding agents, ReAct, tool use, MCP, privacy & security | RLHF | Golden spec |
+| 4. Tester, RAG & Evaluation | Liza Ndede | Tester agent, RAG, benchmark, comparisons | Self-reflection, RAG, evaluation | LLM alignment | Golden code + tests |
 
 ### Role 1: Interface & Requirements
 
@@ -476,7 +476,7 @@ Fill in the dates once the deadline is confirmed.
 
 - [x] Create the GitHub repo
 - [x] Hand-built prototype (archived as the baseline)
-- [ ] Assign roles
+- [x] Assign roles
 - [ ] Confirm the deadline and fill in milestone dates
 - [ ] Day 1 agreements merged
 - [ ] Golden example updated to SQLite
@@ -549,7 +549,7 @@ Weekly teach-back: 10 minutes per owner, others ask viva-style questions. Sectio
 
 ## Baseline: the hand-built prototype
 
-The first prototype used hand-written ReAct loops, a custom LLM wrapper (Gemini or Claude), in-memory storage and the same locked-down sandbox. It is archived on the `archive/hand-built-react` branch and is no longer maintained.
+The first prototype used hand-written ReAct loops, a custom LLM wrapper (Gemini or Claude), in-memory storage and the same locked-down sandbox. It is archived on the `feat/agent-pipeline` branch and is no longer maintained.
 
 It stays useful in two ways: reading it shows what the SDK now does for us, and Role 4 uses it as the baseline in the "hand-built vs SDK" comparison.
 
