@@ -40,7 +40,7 @@ http://localhost:8101/docs    running API · tests passing · data saved in SQLi
 
 **Prosit Builder** is the target interface. It comes from the hand-built prototype and is the reference Role 1 builds toward for the SDK version.
 
-![Prosit Builder: the Run view with a generated API running in the sandbox, and the Assistant panel showing the spec rules and build steps](docs/screenshots/run-view.png)
+![Prosit Builder: the Run view with a generated API running in the sandbox, and the Assistant panel showing the spec rules and build steps](run-view.png)
 
 *The Run view after a build: the API is running in the Docker sandbox on a localhost port, every endpoint can be tried from the left list, and the Assistant panel shows the approved rules and each build step.*
 
