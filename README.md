@@ -18,6 +18,7 @@ http://localhost:8101/docs    running API · tests passing · data saved in SQLi
 
 ## Contents
 
+1. [Sample UI](#sample-ui)
 1. [What we are building](#what-we-are-building)
 2. [Architecture](#architecture)
 3. [Sandbox and security](#sandbox-and-security)
@@ -32,6 +33,32 @@ http://localhost:8101/docs    running API · tests passing · data saved in SQLi
 12. [Course topics in the system](#course-topics-in-the-system)
 13. [Baseline: the hand-built prototype](#baseline-the-hand-built-prototype)
 14. [Known limitations](#known-limitations)
+
+---
+
+## Sample UI
+
+**Prosit Builder** is the target interface. It comes from the hand-built prototype and is the reference Role 1 builds toward for the SDK version.
+
+![Prosit Builder: the Run view with a generated API running in the sandbox, and the Assistant panel showing the spec rules and build steps](docs/screenshots/run-view.png)
+
+*The Run view after a build: the API is running in the Docker sandbox on a localhost port, every endpoint can be tried from the left list, and the Assistant panel shows the approved rules and each build step.*
+
+The window has three parts: a sidebar of views, the main panel, and the Assistant panel on the right, which can be toggled.
+
+| View | Shows |
+| --- | --- |
+| **Home** | Code editor for the generated project |
+| **Files** | The project's files in the workspace |
+| **Map** | How the API's modules import each other, drawn as layered columns |
+| **Tests** | Every test the Tester ran, grouped by file, with the pass count |
+| **Search** | Search inside the generated code |
+| **Activity** | Every agent step, newest first |
+| **Run** | Start and stop the API, open the Swagger docs, and send requests to any endpoint with headers and a JSON body |
+| **Settings** | App settings |
+| **Assistant** (panel) | The chat, the spec for approval, the rules in plain English, build progress, and the result card with **View code**, **Download code** and **Try it** |
+
+The project menu at the top switches between generated projects, and **Download code** exports the whole project.
 
 ---
 
@@ -233,7 +260,8 @@ These are what let four people build separately and still fit together. **Changi
 │   ├── sandbox.py           # docker run for checks, tests and serving
 │   └── scaffold.py          # README, requirements.txt, Dockerfile for generated projects
 ├── server/                  # gateway: sessions, messages, SSE
-├── ui/                      # static frontend
+├── ui/                      # Prosit Builder frontend (static) + desktop window
+├── docs/screenshots/        # images used in this README
 ├── sandbox/                 # Dockerfile + check.py
 ├── rag/                     # pattern library, docs index, search tool (Role 4)
 ├── golden/clinic/           # golden example
@@ -283,6 +311,7 @@ SERVE_PORT_RANGE=8100-8199
 
 ```bash
 python -m server                            # web app at http://localhost:8000
+python -m ui.desktop                        # same app in a desktop window
 python run.py --golden clinic               # full pipeline on the golden example
 python run.py "I run a small clinic..."     # full pipeline from a prompt, in the terminal
 python run.py --stop-all                    # stop every running generated API
@@ -317,15 +346,16 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Write the golden chat transcript
 - [ ] Define the plain-English labels for the user-facing parts of the spec
 
-**Build**
+**Build** (match the [sample UI](#sample-ui))
 - [ ] Gateway: create session, post message, SSE event stream
-- [ ] Chat screen
+- [ ] Port the Prosit Builder UI from the prototype onto the new gateway and event format
+- [ ] Assistant panel: chat, spec approval (Approve / Request change), build progress from events, result card
 - [ ] Requirements agent on the SDK: plain language, one question at a time, `ask_user` + `submit_requirements`
 - [ ] Short-term memory: chat history, summarised when long
 - [ ] Guardrails: stay on topic, flag unsafe requests
-- [ ] Spec approval screen: plain-English view with Approve / Request change
-- [ ] Live build progress from events
-- [ ] Result view: endpoints, test summary, embedded Swagger "try it" panel
+- [ ] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
+- [ ] Tests and Activity views fed from the Tester's results and the step log
+- [ ] Files, Map, Search and Home (editor) views on the generated workspace
 - [ ] Queue and display messages sent during a build
 
 **Connect**
