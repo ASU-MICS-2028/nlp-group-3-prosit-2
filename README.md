@@ -335,10 +335,10 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 | Role | Member | Builds | Course topics owned | Theory topic taught | Starts from |
 | --- | --- | --- | --- | --- | --- |
-| 1. Interface & Requirements | Eugene Sewor | Gateway, UI, requirements agent, approval screen, "try it" panel | Human-in-the-loop, prompt engineering & CoT, memory, alignment | Instruction tuning | Golden chat + spec |
-| 2. Orchestrator & Architect | Henry Brandoh | Orchestrator, shared SDK setup, architect agent, logging | Orchestration, multi-agent, agentic AI, reasoning & planning, decomposition | Preference learning (incl. DPO) | Golden chat |
-| 3. Coder & Sandbox | Heny Olletey | Coder agent, permissions and hooks, sandbox, SQLite volume, security | Coding agents, ReAct, tool use, MCP, privacy & security | RLHF | Golden spec |
-| 4. Tester, RAG & Evaluation | Liza Ndede | Tester agent, RAG, benchmark, comparisons | Self-reflection, RAG, evaluation | LLM alignment | Golden code + tests |
+| 1. Interface & Requirements | Eugene Sewor ([@eugene-sew](https://github.com/eugene-sew)) | Gateway, UI, requirements agent, approval screen, "try it" panel | Human-in-the-loop, prompt engineering & CoT, memory, alignment | Instruction tuning | Golden chat + spec |
+| 2. Orchestrator & Architect | Henry Brandoh ([@henryhkb](https://github.com/henryhkb)) | Orchestrator, shared SDK setup, architect agent, logging | Orchestration, multi-agent, agentic AI, reasoning & planning, decomposition | Preference learning (incl. DPO) | Golden chat |
+| 3. Coder & Sandbox | Heny Olletey ([@henryolletey](https://github.com/henryolletey)) | Coder agent, permissions and hooks, sandbox, SQLite volume, security | Coding agents, ReAct, tool use, MCP, privacy & security | RLHF | Golden spec |
+| 4. Tester, RAG & Evaluation | Liza Ndede ([@lnaikins](https://github.com/lnaikins)) | Tester agent, RAG, benchmark, comparisons | Self-reflection, RAG, evaluation | LLM alignment | Golden code + tests |
 
 ### Role 1: Interface & Requirements
 
