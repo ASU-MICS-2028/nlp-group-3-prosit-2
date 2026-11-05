@@ -14,7 +14,7 @@ Requirements ──► Architect ──► [user approves the plan] ──► Co
 http://localhost:8101/docs    running API · tests passing · data saved in SQLite
 ```
 
-> **Status:** SDK rebuild in progress. The first hand-built prototype is archived (see [Baseline](#baseline-the-hand-built-prototype)). Commands below describe the target structure; update this file as parts land.
+> **Status:** SDK rebuild in progress. Prosit Builder is a web app only (no desktop version). It runs locally for now, and the full version will be hosted online later (see [Hosting](#hosting-planned)). The first hand-built prototype is archived (see [Baseline](#baseline-the-hand-built-prototype)). Commands below describe the target structure; update this file as parts land.
 
 ## Contents
 
@@ -31,8 +31,9 @@ http://localhost:8101/docs    running API · tests passing · data saved in SQLi
 10. [Project checklist](#project-checklist)
 11. [Contributing](#contributing)
 12. [Course topics in the system](#course-topics-in-the-system)
-13. [Baseline: the hand-built prototype](#baseline-the-hand-built-prototype)
-14. [Known limitations](#known-limitations)
+13. [Hosting (planned)](#hosting-planned)
+14. [Baseline: the hand-built prototype](#baseline-the-hand-built-prototype)
+15. [Known limitations](#known-limitations)
 
 ---
 
@@ -42,9 +43,9 @@ http://localhost:8101/docs    running API · tests passing · data saved in SQLi
 
 ![Prosit Builder: the Run view with a generated API running in the sandbox, and the Assistant panel showing the spec rules and build steps](docs/screenshots/run-view.png)
 
-*The Run view after a build: the API is running in the Docker sandbox on a localhost port, every endpoint can be tried from the left list, and the Assistant panel shows the approved rules and each build step.*
+*Screenshot from the prototype, which also ran in a desktop window. The SDK version runs in the browser only. The Run view after a build: the API is running in the Docker sandbox on a localhost port, every endpoint can be tried from the left list, and the Assistant panel shows the approved rules and each build step.*
 
-The window has three parts: a sidebar of views, the main panel, and the Assistant panel on the right, which can be toggled.
+The page has three parts: a sidebar of views, the main panel, and the Assistant panel on the right, which can be toggled.
 
 | View | Shows |
 | --- | --- |
@@ -154,6 +155,7 @@ options = ClaudeAgentOptions(
 | SQLite on a separate writable volume | Data survives restarts, and `data/` is the only writable place. |
 | Tests written from the spec; Coder can't edit them | Stops the Coder from "passing" by changing the tests. |
 | Finish gate in code, not just in the prompt | The model can't declare itself done without passing checks. |
+| Web app only, no desktop version | One codebase that runs locally now and can be hosted online later without changes to the UI. |
 | Agents are never exposed to the browser | Same reasoning as never letting a frontend talk to a database. |
 
 ---
@@ -260,7 +262,7 @@ These are what let four people build separately and still fit together. **Changi
 │   ├── sandbox.py           # docker run for checks, tests and serving
 │   └── scaffold.py          # README, requirements.txt, Dockerfile for generated projects
 ├── server/                  # gateway: sessions, messages, SSE
-├── ui/                      # Prosit Builder frontend (static) + desktop window
+├── ui/                      # Prosit Builder frontend (static), served by the gateway
 ├── docs/screenshots/        # images used in this README
 ├── sandbox/                 # Dockerfile + check.py
 ├── rag/                     # pattern library, docs index, search tool (Role 4)
@@ -311,7 +313,6 @@ SERVE_PORT_RANGE=8100-8199
 
 ```bash
 python -m server                            # web app at http://localhost:8000
-python -m ui.desktop                        # same app in a desktop window
 python run.py --golden clinic               # full pipeline on the golden example
 python run.py "I run a small clinic..."     # full pipeline from a prompt, in the terminal
 python run.py --stop-all                    # stop every running generated API
@@ -547,6 +548,23 @@ Weekly teach-back: 10 minutes per owner, others ask viva-style questions. Sectio
 
 ---
 
+## Hosting (planned)
+
+For development and the demo, everyone runs the web app locally (`python -m server`). After that, the full version will be hosted online so anyone can use it from a browser. Hosting changes a few things, so keep them in mind while building:
+
+| Concern | Local now | Hosted later |
+| --- | --- | --- |
+| Where it runs | Your machine | A server (VM) that can run Docker, because the sandbox needs it. Serverless platforms will not work. |
+| Generated APIs | `http://localhost:81xx/docs` | Reached through the gateway (for example `/p/<project>/docs`). Serve containers stay bound to `127.0.0.1` and are never exposed directly. |
+| Users | One person, no login | Sign-in, with each user's projects kept separate |
+| API cost | Your own key | One server key, so builds need per-user limits (turns, tokens, builds per day) |
+| Builds | One at a time | Queued per user, with idle serve containers stopped |
+| Connection | HTTP | HTTPS |
+
+Practical rule for now: never hard-code `localhost` URLs in the UI or the `BuildResult`. Build them from the gateway's base URL so hosting needs no rewrite.
+
+---
+
 ## Baseline: the hand-built prototype
 
 The first prototype used hand-written ReAct loops, a custom LLM wrapper (Gemini or Claude), in-memory storage and the same locked-down sandbox. It is archived on the `feat/agent-pipeline` branch and is no longer maintained.
@@ -561,3 +579,4 @@ It stays useful in two ways: reading it shows what the SDK now does for us, and 
 - The serve sandbox does not yet block outbound network traffic.
 - `SANDBOX=local` gives no isolation.
 - Builds run one at a time per gateway at first.
+- The app runs locally only. Hosting online is planned, not built.
