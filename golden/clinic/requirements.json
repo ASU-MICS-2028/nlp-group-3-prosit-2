@@ -1,0 +1,27 @@
+{
+  "project_name": "Clinic Appointments",
+  "description": "A system for a small clinic where patients book appointments with doctors online and staff manage doctors and bookings.",
+  "users": ["patients", "clinic staff"],
+  "data": [
+    "patients with full name, phone number (unique), optional email and optional date of birth",
+    "doctors with full name, specialty and optional phone number",
+    "appointments with patient, doctor, start date and time, optional reason and status (booked or cancelled)"
+  ],
+  "actions": [
+    "patients register themselves",
+    "anyone can see the list of doctors",
+    "patients book an appointment with a doctor",
+    "patients view an appointment",
+    "patients cancel an appointment",
+    "staff add, edit and remove doctors",
+    "staff see all patients",
+    "staff see all appointments"
+  ],
+  "rules": [
+    "each appointment lasts 30 minutes",
+    "a doctor cannot have two booked appointments that overlap",
+    "appointments cannot be booked in the past",
+    "cancelled appointments are kept, not deleted",
+    "each patient phone number is unique"
+  ]
+}
