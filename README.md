@@ -345,18 +345,18 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 ### Role 1: Interface & Requirements
 
 **Set up**
-- [ ] Write the golden chat transcript
+- [x] Write the golden chat transcript
 - [ ] Define the plain-English labels for the user-facing parts of the spec
 
 **Build** (match the [sample UI](#sample-ui))
 - [x] Gateway: create session, post message, SSE event stream
 - [x] Port the Prosit Builder UI from the prototype onto the new gateway and event format
-- [ ] Assistant panel: chat, spec approval (Approve / Request change), build progress from events, result card
+- [x] Assistant panel: chat, spec approval (Approve / Request change), build progress from events, result card
 - [ ] Requirements agent on the SDK: plain language, one question at a time, `ask_user` + `submit_requirements`
 - [ ] Short-term memory: chat history, summarised when long
 - [ ] Guardrails: stay on topic, flag unsafe requests
 - [ ] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
-- [ ] Tests and Activity views fed from the Tester's results and the step log
+- [x] Tests and Activity views fed from the Tester's results and the step log
 - [x] Files, Map, Search and Home (editor) views on the generated workspace
 - [ ] Queue and display messages sent during a build
 - [x] Publish: the user picks a subdomain and gets a permanent URL for the built API (gateway routes by host)
@@ -375,7 +375,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Set up**
 - [ ] Lead `ProjectState`, agent format and event format
-- [ ] Write the golden spec
+- [x] Write the golden spec
 
 **Build**
 - [ ] `core/sdk.py`: shared options builder, model and turn limits, logging hook (agent, tool, tokens, cost, time)
