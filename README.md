@@ -261,7 +261,7 @@ These are what let four people build separately and still fit together. **Changi
 │   ├── tools.py             # custom tools (in-process MCP server)
 │   ├── sandbox.py           # docker run for checks, tests and serving
 │   └── scaffold.py          # README, requirements.txt, Dockerfile for generated projects
-├── server/                  # gateway: sessions, messages, SSE
+├── server/                  # gateway: sessions, messages, SSE; stubs.py stands in for unfinished agents
 ├── ui/                      # Prosit Builder frontend (static), served by the gateway
 ├── docs/screenshots/        # images used in this README
 ├── sandbox/                 # Dockerfile + check.py
@@ -312,7 +312,7 @@ SERVE_PORT_RANGE=8100-8199
 ### Run
 
 ```bash
-python -m server                            # web app at http://localhost:8000
+python -m server                            # web app at http://localhost:8000 (stub agents for now)
 python run.py --golden clinic               # full pipeline on the golden example
 python run.py "I run a small clinic..."     # full pipeline from a prompt, in the terminal
 python run.py --stop-all                    # stop every running generated API
@@ -348,15 +348,15 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Define the plain-English labels for the user-facing parts of the spec
 
 **Build** (match the [sample UI](#sample-ui))
-- [ ] Gateway: create session, post message, SSE event stream
-- [ ] Port the Prosit Builder UI from the prototype onto the new gateway and event format
+- [x] Gateway: create session, post message, SSE event stream
+- [x] Port the Prosit Builder UI from the prototype onto the new gateway and event format
 - [ ] Assistant panel: chat, spec approval (Approve / Request change), build progress from events, result card
 - [ ] Requirements agent on the SDK: plain language, one question at a time, `ask_user` + `submit_requirements`
 - [ ] Short-term memory: chat history, summarised when long
 - [ ] Guardrails: stay on topic, flag unsafe requests
 - [ ] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
 - [ ] Tests and Activity views fed from the Tester's results and the step log
-- [ ] Files, Map, Search and Home (editor) views on the generated workspace
+- [x] Files, Map, Search and Home (editor) views on the generated workspace
 - [ ] Queue and display messages sent during a build
 
 **Connect**

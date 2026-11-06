@@ -1,0 +1,129 @@
+"""Placeholder agents and serve sandbox, so the UI and gateway work end to end (milestone M2).
+
+They replay the golden clinic example: the requirements stub asks one question and then
+summarises, the architect returns the golden spec, and the build copies the golden code and
+runs its real tests. Each follows the agent format `async def run(state, emit) -> state`.
+
+Swap the imports in server/app.py for the real ones as they land:
+requirements (Role 1), architect + orchestrator build (Role 2), serve sandbox (Role 3).
+"""
+import asyncio
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+from pathlib import Path
+
+import httpx
+
+from core.events import Emit, Event
+from core.spec import Requirements, Spec
+from core.state import LogEntry, Message, ProjectState
+
+ROOT = Path(__file__).resolve().parent.parent
+GOLDEN = ROOT / "golden" / "clinic"
+CHAT = json.loads((GOLDEN / "chat.json").read_text())
+REPLIES = [CHAT[1]["content"], CHAT[-2]["content"]]  # one question, then the summary
+STEP_DELAY = float(os.getenv("STUB_STEP_DELAY", "0.5"))  # makes progress visible in the UI
+
+
+async def _step(state: ProjectState, emit: Emit, agent: str, action: str, detail: str = "") -> None:
+    state.logs.append(LogEntry(agent=agent, action=action, detail=detail))
+    await emit(Event(type="step", agent=agent, detail=detail, data={"action": action}))
+    await asyncio.sleep(STEP_DELAY)
+
+
+async def requirements(state: ProjectState, emit: Emit) -> ProjectState:
+    turn = sum(m.role == "assistant" for m in state.chat)
+    await asyncio.sleep(STEP_DELAY)
+    state.chat.append(Message(role="assistant", content=REPLIES[min(turn, len(REPLIES) - 1)]))
+    if turn >= len(REPLIES) - 1:
+        state.requirements = Requirements.model_validate_json((GOLDEN / "requirements.json").read_text())
+    await _step(state, emit, "requirements", "reply", "Asked a question" if state.requirements is None else "Requirements complete")
+    return state
+
+
+async def architect(state: ProjectState, emit: Emit) -> ProjectState:
+    if state.change_request:
+        await _step(state, emit, "architect", "change", f"Change noted (stub keeps the golden spec): {state.change_request}")
+        state.change_request = None
+    state.spec = Spec.model_validate_json((GOLDEN / "spec.json").read_text())
+    state.spec_approved = False
+    await _step(state, emit, "architect", "spec", f"{len(state.spec.endpoints)} endpoints")
+    await emit(Event(type="spec", agent="architect", detail=state.spec.project_name))
+    return state
+
+
+RESULT_RE = re.compile(r"^(PASSED|FAILED|ERROR|SKIPPED) (\S+?)::(\S+)", re.M)
+
+
+async def build(state: ProjectState, emit: Emit) -> ProjectState:
+    ws = Path(state.workspace)
+    state.build_ok, state.tests_ok, state.test_report, state.test_summary, state.test_results = False, None, None, "", []
+    await _step(state, emit, "orchestrator", "build", "Build started")
+    shutil.rmtree(ws / "app", ignore_errors=True)
+    shutil.rmtree(ws / "tests", ignore_errors=True)
+    ignore = shutil.ignore_patterns("__pycache__")
+    shutil.copytree(GOLDEN / "app", ws / "app", ignore=ignore)
+    await _step(state, emit, "coder", "write_file", "app/main.py")
+    await _step(state, emit, "coder", "run_checks", "App imports and starts")
+    await _step(state, emit, "coder", "finish", "Checks passed")
+    state.build_ok = True
+
+    shutil.copytree(GOLDEN / "tests", ws / "tests", ignore=ignore)
+    for f in ("conftest.py", "chat.json", "requirements.json", "spec.json"):  # the golden tests read these
+        shutil.copy(GOLDEN / f, ws / f)
+    await _step(state, emit, "tester", "write_test", "tests/test_api.py")
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "pytest", "-q", "-rA", "-p", "no:cacheprovider", "tests", cwd=ws,
+        env={**os.environ, "PYTHONPATH": str(ROOT)}, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    out = (await proc.communicate())[0].decode(errors="replace")
+    state.test_results = [{"file": f, "name": n, "outcome": o.lower()} for o, f, n in RESULT_RE.findall(out)]
+    state.test_summary = out.strip().splitlines()[-1].strip("= ") if out.strip() else "no output"
+    state.tests_ok = proc.returncode == 0
+    if not state.tests_ok:
+        state.test_report = out[-3000:]
+    await _step(state, emit, "tester", "run_tests", state.test_summary)
+    await emit(Event(type="test", agent="tester", detail=state.test_summary, data={"ok": state.tests_ok}))
+    await emit(Event(type="result", agent="orchestrator", detail="Build finished", data={"build_ok": True, "tests_ok": state.tests_ok}))
+    return state
+
+
+# ---------- serve sandbox stand-in (Role 3 replaces with core/sandbox) ----------
+# ponytail: plain local process, not isolated; fine for the trusted golden code only.
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+async def serve(workspace: str, root_path: str) -> tuple[subprocess.Popen, int]:
+    """Start the API on 127.0.0.1. root_path is the gateway prefix, so /docs finds its openapi.json."""
+    port = _free_port()
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port), "--root-path", root_path],
+        cwd=workspace, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    async with httpx.AsyncClient() as c:
+        for _ in range(50):
+            if proc.poll() is not None:
+                raise RuntimeError(f"API didn't start: {proc.stderr.read()[-500:]}")
+            try:
+                await c.get(f"http://127.0.0.1:{port}/openapi.json", timeout=1)
+                return proc, port
+            except httpx.HTTPError:
+                await asyncio.sleep(0.2)
+    proc.kill()
+    raise RuntimeError("API didn't start in time")
+
+
+def stop(handle: tuple[subprocess.Popen, int]) -> None:
+    proc, _ = handle
+    proc.terminate()
+    try:
+        proc.wait(5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
