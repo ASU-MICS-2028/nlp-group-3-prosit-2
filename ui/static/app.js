@@ -199,7 +199,26 @@ async function openFile(path, line = null, switchView = true) {
   });
 }
 
+// Phones: one screen at a time, switched by the floating tab bar. "chat" shows the assistant
+// full screen; views under "More" open from a sheet.
+const MOBILE = matchMedia('(max-width: 760px)');
+const MORE_VIEWS = ['files', 'map', 'search', 'activity', 'settings'];
+function markTabbar(v) {
+  document.querySelectorAll('.tabbar [data-tab]').forEach(b =>
+    b.classList.toggle('on', b.dataset.tab === v || (b.dataset.tab === 'more' && MORE_VIEWS.includes(v))));
+}
+function openMore(show) { $('#more-sheet').hidden = !show; }
 function setView(v) {
+  openMore(false);
+  if (v === 'chat') {
+    document.body.classList.add('chat-open'); markTabbar('chat');
+    if (!MOBILE.matches) toggleAssistant(true);
+    const m = $('#messages'); m.scrollTop = m.scrollHeight;
+    return;
+  }
+  document.body.classList.remove('chat-open');
+  markTabbar(v);
+  window.scrollTo(0, 0);
   view = v;
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   document.querySelectorAll('.view').forEach(el => (el.hidden = el.id !== `view-${v}`));
@@ -212,6 +231,8 @@ function render() {
   const st = S.state;
   $('#project-name').textContent = st.spec?.project_name || 'New project';
   $('#export-btn').hidden = !st.build_ok;
+  $('#sheet-export').hidden = !st.build_ok;
+  document.querySelector('.tabbar .busy-dot').hidden = !S.busy;
   renderChat();
   renderComposer();
   renderCenter();
@@ -527,7 +548,9 @@ function renderRunInner() {
         <button class="btn ${pub ? '' : 'primary'}" id="open-publish">${icon('globe')}${pub ? 'Live on the web' : 'Publish'}</button>
       </div></div>
     <div class="panel-body">
-      <div class="try">
+      <div class="try ${tryState.listOpen ? 'list-open' : ''}">
+        <button class="act-picker" id="act-picker" aria-expanded="${!!tryState.listOpen}">
+          <span class="verb v-${verb(ep)}">${verb(ep)}</span><span class="act-picker-name">${esc(ep.summary)}</span>${icon('chevronDown')}</button>
         <nav class="actions">${Object.entries(groups).map(([g, idx]) => `
           <div class="act-group">${esc(g === 'Other' ? 'Other' : g + 's')}</div>
           ${idx.map(i => `<button class="act ${i === tryState.ep ? 'sel' : ''}" data-ep="${i}">
@@ -831,8 +854,10 @@ function buildCard() {
 function renderComposer() {
   const phase = S.phase, busy = !!S.busy;
   const input = $('#input');
-  input.placeholder = busy ? 'Working on it...' : phase === 'chat' ? 'Ask a question or describe what you want...'
-    : phase === 'review' ? 'Describe a change to the design, or approve it above...' : 'Describe a new feature or change...';
+  const short = MOBILE.matches;   // one line on a phone
+  input.placeholder = busy ? 'Working on it...' : phase === 'chat' ? (short ? 'Describe your app...' : 'Ask a question or describe what you want...')
+    : phase === 'review' ? (short ? 'Ask for a change...' : 'Describe a change to the design, or approve it above...')
+    : (short ? 'Ask for a change...' : 'Describe a new feature or change...');
   input.disabled = busy;
   $('#send').disabled = busy;
 }
@@ -892,11 +917,16 @@ function toggleAssistant(show) {
 // ---------- events ----------
 document.addEventListener('click', async e => {
   if (e.target.id === 'modal-back') { tryState.publishOpen = false; return renderRun(); }
+  if (e.target.id === 'more-sheet') return openMore(false);
   const t = e.target.closest('button, a, .tab, .gutter div, .lines div');
   if (!t) { $('#project-menu').hidden = true; return; }
   if (!t.closest('.project-picker')) $('#project-menu').hidden = true;
 
-  if (t.matches('.nav-item')) return setView(t.dataset.view);
+  if (t.matches('.nav-item, .sheet-item[data-view]')) return setView(t.dataset.view);
+  if (t.dataset.tab) return t.dataset.tab === 'more' ? openMore($('#more-sheet').hidden) : setView(t.dataset.tab);
+  if (t.id === 'sheet-theme') { openMore(false); return applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); }
+  if (t.id === 'sheet-export') openMore(false);
+  if (t.id === 'act-picker') { tryState.listOpen = !tryState.listOpen; return renderRun(); }
   if (t.id === 'user') return setView('settings');
   if (t.id === 'project-btn') return toggleProjectMenu();
   if (t.dataset.project) return switchProject(t.dataset.project);
@@ -930,7 +960,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.go) return setView(t.dataset.go);
   if (t.dataset.testFile) return openTest(t.dataset.testFile, t.dataset.testFn);
   if (t.id === 'run-stop') { S = await api('/api/run/stop', { method: 'POST' }); lastChatKey = ''; return render(); }
-  if (t.dataset.ep !== undefined) { tryState.ep = +t.dataset.ep; tryState.resp = null; return renderRun(); }
+  if (t.dataset.ep !== undefined) { tryState.ep = +t.dataset.ep; tryState.resp = null; tryState.listOpen = false; return renderRun(); }
   if (t.dataset.role) { tryState.roles[tryState.ep] = t.dataset.role; return renderRun(); }
   if (t.id === 'open-publish') { tryState.publishOpen = true; renderRun(); return $('#pub-sub')?.focus(); }
   if (t.id === 'close-publish') { tryState.publishOpen = false; return renderRun(); }
@@ -968,6 +998,7 @@ $('#input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($('#input').value); }
 });
 $('#input').addEventListener('input', autoGrow);
+$('#send').addEventListener('pointerdown', e => e.preventDefault());   // keep the keyboard up while sending
 $('#attach').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
@@ -980,6 +1011,7 @@ $('#attach').addEventListener('change', async e => {
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setView('search'); $('#search-input')?.focus(); }
   if (e.key === 'Escape' && tryState.publishOpen) { tryState.publishOpen = false; renderRun(); }
+  if (e.key === 'Escape') openMore(false);
 });
 
 // ---------- boot ----------
@@ -988,7 +1020,8 @@ document.addEventListener('keydown', e => {
   applyTheme(localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   settings = await api('/api/settings').catch(() => null);
   renderUser();
-  setView('home');
+  setView(MOBILE.matches ? 'chat' : 'home');   // on a phone the conversation comes first
+  MOBILE.addEventListener('change', () => { if (!MOBILE.matches && document.body.classList.contains('chat-open')) setView('home'); });
   await refresh();
   listen();
 })();
