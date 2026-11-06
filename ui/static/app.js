@@ -141,7 +141,7 @@ let cursor = { ln: 1, col: 1 };
 let highlightLine = null;
 let busySince = null, lastChatKey = '';
 let settings = null;
-let tryState = { ep: 0, role: 'user', uid: '1', resp: null, sending: false };
+let tryState = { ep: 0, uid: '1', roles: {}, values: {}, resp: null, sending: false, publishOpen: false };
 let pubState = { project: null, sub: null, check: null, busy: false };
 
 // ---------- live updates ----------
@@ -466,103 +466,161 @@ function renderActivity() {
 }
 
 // run / try it
-const SAMPLE = { str: 'example', int: 1, float: 1.5, bool: true, email: 'user@example.com' };
-function sampleBody(ep) {
-  const ent = S.state.spec?.entities.find(e => e.name === ep.entity);
-  if (!ent || !ep.request_fields.length) return '';
-  const now = new Date();
-  const obj = {};
-  for (const name of ep.request_fields) {
-    const f = ent.fields.find(x => x.name === name);
-    const t = f?.type || 'str';
-    obj[name] = t === 'date' ? now.toISOString().slice(0, 10) : t === 'datetime' ? new Date(now.getTime() + 864e5).toISOString().slice(0, 19)
-      : name.endsWith('_id') ? 1 : SAMPLE[t];
-  }
-  return JSON.stringify(obj, null, 2);
+// ---------- run: try the API in plain language ----------
+const human = s => String(s).replace(/_id$/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+const ROLE_LABEL = { public: 'Anyone', user: 'Signed-in user', admin: 'Admin' };
+function verb(ep) {
+  if (ep.method === 'GET') return 'View';
+  if (ep.method === 'DELETE') return 'Delete';
+  if (ep.method === 'PUT' || ep.method === 'PATCH') return 'Edit';
+  return /\{\w+\}/.test(ep.path) ? 'Action' : 'Create';
+}
+function entityOf(ep) { return S.state.spec?.entities.find(e => e.name === ep.entity); }
+function fieldInput(ep, name) {   // one form control per field the action accepts
+  const f = entityOf(ep)?.fields.find(x => x.name === name) || { name, type: 'str', required: false };
+  const key = `${tryState.ep}:${name}`, v = tryState.values[key] ?? defaultValue(f);
+  const label = `${esc(human(name))}${name.endsWith('_id') ? ' number' : ''}${f.required ? '' : ' <span class="opt">optional</span>'}`;
+  if (f.type === 'bool') return `<label class="check"><input type="checkbox" data-f="${key}" ${v ? 'checked' : ''}> ${label}</label>`;
+  const type = { int: 'number', float: 'number', date: 'date', datetime: 'datetime-local', email: 'email' }[f.type] || 'text';
+  return `<div class="field"><label>${label}</label><input type="${type}" data-f="${key}" value="${esc(v)}" ${f.type === 'float' ? 'step="any"' : ''}
+    ${f.description ? `placeholder="${esc(f.description)}"` : ''}></div>`;
+}
+function defaultValue(f) {
+  if (f.name.endsWith('_id')) return '1';
+  if (f.type === 'datetime') { const d = new Date(Date.now() + 864e5); d.setHours(10, 0, 0, 0); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16); }
+  if (f.type === 'bool') return false;
+  return '';
+}
+function paramInput(ep, p) {
+  const key = `${tryState.ep}:{${p}}`;
+  const label = p === 'id' ? `Which ${esc((ep.entity || 'record').toLowerCase())}? (number)` : esc(human(p));
+  return `<div class="field"><label>${label}</label><input type="text" data-f="${key}" value="${esc(tryState.values[key] ?? '1')}"></div>`;
 }
 
 function renderRun() {
   const focus = document.activeElement?.closest('#view-run') ? document.activeElement : null;
-  const keep = focus && { id: focus.id, start: focus.selectionStart, end: focus.selectionEnd };
+  const keep = focus && { id: focus.id, f: focus.dataset.f, start: focus.selectionStart, end: focus.selectionEnd };
   renderRunInner();
-  const el = keep?.id && document.getElementById(keep.id);
+  const el = keep && (keep.id ? document.getElementById(keep.id) : keep.f && document.querySelector(`[data-f="${CSS.escape(keep.f)}"]`));
   if (el) { el.focus(); try { el.setSelectionRange(keep.start, keep.end); } catch {} }
 }
 function renderRunInner() {
   const st = S.state, srv = S.server, eps = st.spec?.endpoints || [];
-  const ep = eps[tryState.ep];
-  const params = ep ? [...ep.path.matchAll(/\{(\w+)\}/g)].map(m => m[1]) : [];
+  if (!st.build_ok) {
+    $('#view-run').innerHTML = `<div class="panel-head">Try it</div><div class="panel-body"><div class="empty-run">
+      ${icon('play')}<h3>Nothing to try yet</h3><p>Finish the chat and approve the design. Once your app is built, you can try it here.</p></div></div>`;
+    return;
+  }
+  const ep = eps[tryState.ep] || eps[0];
+  const params = [...ep.path.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
+  const role = tryState.roles[tryState.ep] ?? ep.access;
+  const groups = {};
+  eps.forEach((e, i) => (groups[e.entity || 'Other'] ||= []).push(i));
+  const roles = ['public', ...(st.spec.roles || ['user', 'admin'])];
+  const pub = S.published;
   $('#view-run').innerHTML = `
-    <div class="panel-head">Run <span class="sub">start your API and try it</span></div>
-    <div class="panel-body">
-      <div class="card"><div class="row">
-        <span class="dot ${srv ? 'on' : ''}"></span>
-        <div style="flex:1;min-width:200px"><h4>${srv ? 'Your API is running' : st.build_ok ? 'Ready to start' : 'Not built yet'}</h4>
-          <p>${srv ? `<a href="${srv.url}/docs" target="_blank">Swagger docs</a> · runs in the sandbox and is reached only through this app`
-            : st.build_ok ? 'Starts in the sandbox with memory and CPU limits.' : 'Finish the chat and approve the design first.'}</p></div>
-        ${srv ? `<a class="btn" href="${srv.url}/docs" target="_blank">${icon('external')}Open docs</a><button class="btn" id="run-stop">${icon('stop')}Stop</button>`
-          : `<button class="btn primary" id="run-start" ${st.build_ok ? '' : 'disabled'}>${icon('play')}Start API</button>`}
+    <div class="panel-head">Try it <span class="sub">see what your app does</span>
+      <div class="right">
+        ${srv ? `<span class="live-pill"><span class="dot on"></span>Running</span>
+                 <button class="btn ghost" id="run-stop" title="Stop the test copy">${icon('stop')}Stop</button>`
+              : `<span class="live-pill off"><span class="dot"></span>Stopped</span>`}
+        <button class="btn ${pub ? '' : 'primary'}" id="open-publish">${icon('globe')}${pub ? 'Live on the web' : 'Publish'}</button>
       </div></div>
-      ${st.build_ok ? publishCard() : ''}
-      ${eps.length ? `
+    <div class="panel-body">
       <div class="try">
-        <div class="ep-list">${eps.map((e, i) => `<button class="ep ${i === tryState.ep ? 'sel' : ''}" data-ep="${i}">
-          <span class="method m-${e.method}">${e.method}</span><span>${esc(e.path)}</span></button>`).join('')}</div>
+        <nav class="actions">${Object.entries(groups).map(([g, idx]) => `
+          <div class="act-group">${esc(g === 'Other' ? 'Other' : g + 's')}</div>
+          ${idx.map(i => `<button class="act ${i === tryState.ep ? 'sel' : ''}" data-ep="${i}">
+            <span class="verb v-${verb(eps[i])}">${verb(eps[i])}</span><span>${esc(eps[i].summary)}</span></button>`).join('')}`).join('')}
+        </nav>
         <div class="form">
-          <div><b>${esc(ep.summary)}</b> <span class="sub" style="color:var(--muted);font-size:13px">· access: ${ep.access}</span></div>
-          ${params.length ? `<div class="grid2">${params.map(p => `<div class="field"><label>${esc(p)}</label><input data-param="${esc(p)}" value="1"></div>`).join('')}</div>` : ''}
-          <div class="grid2">
-            <div class="field"><label>X-Role</label><select id="try-role">
-              ${['public', 'user', 'admin'].map(r => `<option ${r === tryState.role ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
-            <div class="field"><label>X-User-Id</label><input id="try-uid" value="${esc(tryState.uid)}"></div>
-          </div>
-          ${['POST', 'PUT', 'PATCH'].includes(ep.method) ? `<div class="field"><label>Body (JSON)</label><textarea id="try-body">${esc(sampleBody(ep))}</textarea></div>` : ''}
-          <div class="row"><button class="btn primary" id="try-send" ${srv && !tryState.sending ? '' : 'disabled'}>${icon('send')}${tryState.sending ? 'Sending...' : 'Send request'}</button>
-            ${!srv ? '<span class="hint">Start the API to send requests.</span>' : ''}</div>
-          ${tryState.resp ? `<div class="response"><div class="head"><span class="status ${tryState.resp.status < 400 ? 'ok' : 'bad'}">${tryState.resp.status}</span>
-            <span style="color:var(--muted)">${tryState.resp.ms} ms</span></div><pre>${esc(pretty(tryState.resp.body))}</pre></div>` : ''}
+          <div class="form-head"><h3>${esc(ep.summary)}</h3>
+            <span class="who-needs">${ep.access === 'public' ? 'Anyone can do this' : `Needs: ${esc(ROLE_LABEL[ep.access] || ep.access)}`}</span></div>
+          <div class="field"><label>Try it as</label><div class="seg">${roles.map(r =>
+            `<button class="${r === role ? 'on' : ''}" data-role="${r}">${esc(ROLE_LABEL[r] || human(r))}</button>`).join('')}</div></div>
+          ${role !== 'public' ? `<div class="field narrow"><label>User number</label><input id="try-uid" value="${esc(tryState.uid)}"></div>` : ''}
+          ${params.map(p => paramInput(ep, p)).join('')}
+          ${ep.request_fields.map(n => fieldInput(ep, n)).join('')}
+          <div class="row"><button class="btn primary big" id="try-send" ${tryState.sending ? 'disabled' : ''}>${icon('send')}${
+            tryState.sending ? (srv ? 'Trying...' : 'Starting your app...') : 'Try it'}</button></div>
+          ${tryState.resp ? responseView(tryState.resp) : ''}
         </div>
-      </div>` : ''}
-    </div>`;
+      </div>
+    </div>
+    ${tryState.publishOpen ? publishDialog() : ''}`;
 }
-// publish: a permanent URL on the user's own subdomain
+
+const STATUS_TEXT = {
+  200: 'Done', 201: 'Saved', 204: 'Done',
+  400: "The request wasn't accepted", 401: 'You need to say who you are. Pick "Signed-in user" or "Admin" above.',
+  403: 'Not allowed for this person. Try it as someone with more access.', 404: 'Not found. Check the number you entered.',
+  409: "That clashes with something that's already saved", 422: 'Some information is missing or not valid',
+};
+function responseView(r) {
+  const ok = r.status < 400;
+  let data = null; try { data = JSON.parse(r.body); } catch {}
+  const detail = data && !ok ? data.detail : null;
+  const problems = Array.isArray(detail) ? detail.map(d => `${human((d.loc || []).slice(-1)[0] || '')}: ${d.msg}`) : detail ? [String(detail)] : [];
+  const msg = STATUS_TEXT[r.status] || (ok ? 'Done' : 'Something went wrong');
+  return `<div class="try-result ${ok ? 'ok' : 'bad'}">
+    <div class="result-head">${icon(ok ? 'check' : 'alert')}<b>${esc(msg)}</b></div>
+    ${problems.length ? `<ul class="problems">${problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+    ${ok ? resultData(data) : ''}
+    <details class="raw"><summary>Technical details</summary>
+      <div class="raw-meta">Status ${r.status} · ${r.ms} ms · ${esc(r.method)} ${esc(r.path)}</div><pre>${esc(pretty(r.body))}</pre></details>
+  </div>`;
+}
+function resultData(d) {
+  const cell = v => v === null || v === undefined ? '<span class="opt">empty</span>' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : esc(typeof v === 'object' ? JSON.stringify(v) : v);
+  if (Array.isArray(d)) {
+    if (!d.length) return '<p class="nothing">Nothing saved yet.</p>';
+    const cols = [...new Set(d.flatMap(o => (o && typeof o === 'object' ? Object.keys(o) : [])))];
+    if (!cols.length) return `<ul>${d.map(v => `<li>${cell(v)}</li>`).join('')}</ul>`;
+    return `<div class="table-wrap"><table><thead><tr>${cols.map(c => `<th>${esc(human(c))}</th>`).join('')}</tr></thead>
+      <tbody>${d.map(o => `<tr>${cols.map(c => `<td>${cell(o[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <p class="count">${d.length} ${d.length === 1 ? 'record' : 'records'}</p>`;
+  }
+  if (d && typeof d === 'object') return `<dl class="kv">${Object.entries(d).map(([k, v]) => `<dt>${esc(human(k))}</dt><dd>${cell(v)}</dd>`).join('')}</dl>`;
+  return '';
+}
+
+// publish: a permanent URL on the user's own subdomain, in a dialog so the Try page keeps its space
 function publishParts() { return (S.publish_url || 'http://{sub}').split('{sub}'); }
 function defaultSub() {
   return (S.state.spec?.project_name || 'my-api').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
 }
-function publishCard() {
+function publishDialog() {
   const pub = S.published, [pre, post] = publishParts();
   if (pubState.project !== S.state.workspace) {   // new project: start from its name
     pubState = { project: S.state.workspace, sub: pub?.subdomain || defaultSub(), check: null, busy: false };
     setTimeout(checkSub);
   }
-  return `<div class="card publish"><div class="row">
-      <span class="dot ${pub ? 'on' : ''}"></span>
-      <div style="flex:1;min-width:200px"><h4>${pub ? 'Published' : 'Publish your API'}</h4>
-        <p>${pub ? `Live at <a href="${esc(pub.url)}" target="_blank">${esc(pub.url)}</a> · stays online after you close this page`
-          : 'Give it a permanent web address that anyone can use, even when this page is closed.'}</p></div>
-      ${pub ? `<a class="btn" href="${esc(pub.url)}/docs" target="_blank">${icon('external')}Open</a>
-        <button class="btn" id="pub-copy">Copy URL</button>` : ''}
-    </div>
-    <div class="field" style="margin-top:14px"><label>Web address</label>
+  return `<div class="modal-back" id="modal-back"><div class="modal" role="dialog" aria-labelledby="pub-title">
+    <div class="modal-head"><h3 id="pub-title">${icon('globe')}${pub ? 'Your app is on the web' : 'Put your app on the web'}</h3>
+      <button class="icon-btn small" id="close-publish" title="Close">${icon('x')}</button></div>
+    <p class="desc">${pub ? `Anyone can use it at <a href="${esc(pub.url)}" target="_blank">${esc(pub.url.replace(/^https?:\/\//, ''))}</a>, even when this page is closed.`
+      : 'Choose a web address. Your app stays online at that address, even when this page is closed.'}</p>
+    ${pub ? `<div class="row"><button class="btn" id="pub-copy">Copy address</button>
+      <a class="btn" href="${esc(pub.url)}/docs" target="_blank">${icon('external')}Open</a></div>` : ''}
+    <div class="field" style="margin-top:16px"><label>Web address</label>
       <div class="sub-input"><span>${esc(pre)}</span><input id="pub-sub" value="${esc(pubState.sub)}" maxlength="32" spellcheck="false" autocomplete="off"><span>${esc(post)}</span></div>
       <div id="pub-status">${pubStatus()}</div></div>
-    <div class="row" style="margin-top:12px">
-      ${pubButton()}
-      ${pub ? `<button class="btn" id="pub-stop" ${pubState.busy ? 'disabled' : ''}>${icon('stop')}Unpublish</button>` : ''}
-      <span class="hint">${pub ? `Published ${new Date(pub.published_at).toLocaleString()}. Rebuilding doesn't change the live API until you update it.` : 'Anyone with the address can use it.'}</span>
-    </div></div>`;
+    <div class="row" style="margin-top:14px">${pubButton()}
+      ${pub ? `<button class="btn" id="pub-stop" ${pubState.busy ? 'disabled' : ''}>Take offline</button>` : ''}</div>
+    <p class="hint">${pub ? `Published ${new Date(pub.published_at).toLocaleString()}. Changes you build later only go live when you press Update.`
+      : 'Letters, numbers and dashes. Anyone with the address can use your app.'}</p>
+  </div></div>`;
 }
 function pubStatus() {
   const c = pubState.check;
-  if (S.published && pubState.sub === S.published.subdomain) return '<span class="hint">Your current address</span>';
+  if (S.published && pubState.sub === S.published.subdomain) return '<span class="hint">This is your current address</span>';
   return !pubState.sub ? '' : c === null ? '<span class="hint">Checking...</span>'
     : c.available ? `<span class="hint ok-text">${icon('check')}Available</span>` : `<span class="hint bad-text">${esc(c.reason)}</span>`;
 }
 function pubButton() {
   const pub = S.published, changed = pub && pubState.sub !== pub.subdomain;
   return `<button class="btn primary" id="pub-go" ${pubState.check?.available && !pubState.busy ? '' : 'disabled'}>${icon('globe')}${
-    pubState.busy ? 'Publishing...' : !pub ? 'Publish' : changed ? 'Move to this address' : 'Update with latest build'}</button>`;
+    pubState.busy ? 'Publishing...' : !pub ? 'Publish' : changed ? 'Move to this address' : 'Update with latest changes'}</button>`;
 }
 let pubTimer = null;
 async function checkSub() {   // updates the status and button in place so typing keeps focus
@@ -574,39 +632,52 @@ async function checkSub() {   // updates the status and button in place so typin
 }
 async function publishNow() {
   pubState.busy = true; renderRun();
-  try { S = await api('/api/publish', { body: { subdomain: pubState.sub } }); toast(`Published at ${S.published.url}`); }
+  try { S = await api('/api/publish', { body: { subdomain: pubState.sub } }); toast('Your app is on the web'); }
   catch (e) { toast(e.message); }
   pubState.busy = false; lastChatKey = ''; render();
 }
 async function unpublishNow() {
-  if (!confirm('Take this API offline? Its address will stop working.')) return;
+  if (!confirm('Take your app offline? Its web address will stop working.')) return;
   pubState.busy = true; renderRun();
   try {
     const r = await fetch('/api/publish', { method: 'DELETE' });
-    if (!r.ok) throw new Error((await r.json()).detail || 'Unpublish failed');
-    S = await r.json(); toast('Unpublished');
+    if (!r.ok) throw new Error((await r.json()).detail || 'Could not take it offline');
+    S = await r.json(); toast('Your app is offline');
   } catch (e) { toast(e.message); }
   pubState.busy = false; render();
 }
 
 const pretty = s => { try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; } };
 
+function collectBody(ep) {
+  const body = {};
+  for (const name of ep.request_fields) {
+    const el = document.querySelector(`[data-f="${CSS.escape(`${tryState.ep}:${name}`)}"]`);
+    if (!el) continue;
+    const f = entityOf(ep)?.fields.find(x => x.name === name);
+    if (el.type === 'checkbox') { body[name] = el.checked; continue; }
+    if (el.value === '') continue;                     // optional and left blank
+    body[name] = el.type === 'number' ? Number(el.value) : f?.type === 'datetime' && el.value.length === 16 ? el.value + ':00' : el.value;
+  }
+  return body;
+}
 async function sendTry() {
   const ep = S.state.spec.endpoints[tryState.ep];
   let path = ep.path;
-  document.querySelectorAll('[data-param]').forEach(i => (path = path.replace(`{${i.dataset.param}}`, encodeURIComponent(i.value))));
-  tryState.role = $('#try-role').value; tryState.uid = $('#try-uid').value;
-  const headers = tryState.role === 'public' ? {} : { 'X-Role': tryState.role, 'X-User-Id': tryState.uid };
-  const body = $('#try-body')?.value;
+  for (const m of ep.path.matchAll(/\{(\w+)\}/g))
+    path = path.replace(m[0], encodeURIComponent(tryState.values[`${tryState.ep}:${m[0]}`] ?? '1'));
+  const role = tryState.roles[tryState.ep] ?? ep.access;
+  const headers = role === 'public' ? {} : { 'X-Role': role, 'X-User-Id': tryState.uid };
+  const hasBody = ep.request_fields.length > 0;
+  const body = hasBody ? JSON.stringify(collectBody(ep)) : undefined;
   tryState.sending = true; renderRun();
-  const send = body && !['GET', 'DELETE'].includes(ep.method);
-  const t0 = performance.now();
   try {
-    const r = await fetch(S.server.url + path, { method: ep.method, body: send ? body : undefined,
-      headers: { ...headers, ...(send ? { 'Content-Type': 'application/json' } : {}) } });
-    tryState.resp = { status: r.status, body: await r.text(), ms: Math.round(performance.now() - t0) };
+    if (!S.server) S = await api('/api/run', { method: 'POST' });   // start the test copy on first try
+    const t0 = performance.now();
+    const r = await fetch(S.server.url + path, { method: ep.method, body, headers: { ...headers, ...(hasBody ? { 'Content-Type': 'application/json' } : {}) } });
+    tryState.resp = { status: r.status, body: await r.text(), ms: Math.round(performance.now() - t0), method: ep.method, path };
   } catch (e) { toast(e.message); }
-  tryState.sending = false; renderRun();
+  tryState.sending = false; lastChatKey = ''; render();
 }
 
 // settings
@@ -740,13 +811,12 @@ function buildCard() {
       <button class="btn" data-open="app/main.py">${icon('code')}View code</button>
       ${st.tests_ok === false ? `<button class="btn" id="rebuild">${icon('refresh')}Rebuild</button>` : ''}
       <a class="btn" href="/api/export" download>${icon('download')}Download code</a>
-      <button class="btn" id="goto-publish">${icon('globe')}${S.published ? 'Published' : 'Publish'}</button>
-      ${S.server ? `<button class="btn primary" id="goto-run">${icon('play')}Try it</button>`
-        : `<button class="btn primary" id="start-api">${icon('play')}Start API</button>`}</div>`;
+      <button class="btn" id="goto-publish">${icon('globe')}${S.published ? 'Live on the web' : 'Publish'}</button>
+      <button class="btn primary" id="goto-run">${icon('play')}Try it</button></div>`;
   } else if (failed) {
     foot = `<div class="acard-foot"><button class="btn primary" id="rebuild">${icon('refresh')}Try again</button></div>`;
   }
-  const running = S.server ? ` It's running at <a href="${S.server.url}/docs" target="_blank">${S.server.url}/docs</a>.` : '';
+  const running = S.published ? ` It's live at <a href="${esc(S.published.url)}" target="_blank">${esc(S.published.url.replace(/^https?:\/\//, ''))}</a>.` : '';
   const tests = st.tests_ok ? ' The tester checked it against your design.'
     : st.tests_ok === false ? '' : ' Not tested yet.';
   const summary = st.build_ok && !building
@@ -821,6 +891,7 @@ function toggleAssistant(show) {
 
 // ---------- events ----------
 document.addEventListener('click', async e => {
+  if (e.target.id === 'modal-back') { tryState.publishOpen = false; return renderRun(); }
   const t = e.target.closest('button, a, .tab, .gutter div, .lines div');
   if (!t) { $('#project-menu').hidden = true; return; }
   if (!t.closest('.project-picker')) $('#project-menu').hidden = true;
@@ -855,22 +926,19 @@ document.addEventListener('click', async e => {
   if (t.id === 'approve') return act('/api/spec/approve');
   if (t.id === 'request-change') { $('#input').focus(); return toast('Type the change you want below and press Enter.'); }
   if (t.id === 'rebuild') return act('/api/build');
-  if (t.id === 'start-api' || t.id === 'run-start') {
-    t.disabled = true; t.textContent = 'Starting...';
-    try { S = await api('/api/run', { method: 'POST' }); lastChatKey = ''; render(); setView('run'); }
-    catch (err) { toast(err.message); render(); }
-    return;
-  }
   if (t.id === 'goto-run') return setView('run');
   if (t.dataset.go) return setView(t.dataset.go);
   if (t.dataset.testFile) return openTest(t.dataset.testFile, t.dataset.testFn);
   if (t.id === 'run-stop') { S = await api('/api/run/stop', { method: 'POST' }); lastChatKey = ''; return render(); }
   if (t.dataset.ep !== undefined) { tryState.ep = +t.dataset.ep; tryState.resp = null; return renderRun(); }
+  if (t.dataset.role) { tryState.roles[tryState.ep] = t.dataset.role; return renderRun(); }
+  if (t.id === 'open-publish') { tryState.publishOpen = true; renderRun(); return $('#pub-sub')?.focus(); }
+  if (t.id === 'close-publish') { tryState.publishOpen = false; return renderRun(); }
   if (t.id === 'try-send') return sendTry();
   if (t.id === 'pub-go') return publishNow();
   if (t.id === 'pub-stop') return unpublishNow();
   if (t.id === 'pub-copy') { navigator.clipboard?.writeText(S.published.url); return toast('URL copied'); }
-  if (t.id === 'goto-publish') return setView('run');
+  if (t.id === 'goto-publish') { tryState.publishOpen = true; return setView('run'); }
   if (t.id === 'set-save') return saveSettings();
   if (t.id === 'attach-btn') return $('#attach').click();
 });
@@ -882,11 +950,12 @@ function caretCol(lineEl, sel) {
 }
 
 document.addEventListener('change', e => {
-  if (e.target.id === 'try-role') tryState.role = e.target.value;
+  if (e.target.dataset.f && e.target.type === 'checkbox') tryState.values[e.target.dataset.f] = e.target.checked;
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'search-input') { clearTimeout(searchTimer); searchTimer = setTimeout(() => doSearch(e.target.value), 200); }
   if (e.target.id === 'try-uid') tryState.uid = e.target.value;
+  if (e.target.dataset.f && e.target.type !== 'checkbox') tryState.values[e.target.dataset.f] = e.target.value;
   if (e.target.id === 'pub-sub') {
     pubState.sub = e.target.value.toLowerCase(); pubState.check = null;
     $('#pub-status').innerHTML = pubStatus(); $('#pub-go').outerHTML = pubButton();
@@ -910,6 +979,7 @@ $('#attach').addEventListener('change', async e => {
 });
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setView('search'); $('#search-input')?.focus(); }
+  if (e.key === 'Escape' && tryState.publishOpen) { tryState.publishOpen = false; renderRun(); }
 });
 
 // ---------- boot ----------

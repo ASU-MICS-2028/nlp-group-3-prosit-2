@@ -55,7 +55,7 @@ The page has three parts: a sidebar of views, the main panel, and the Assistant 
 | **Tests** | Every test the Tester ran, grouped by file, with the pass count |
 | **Search** | Search inside the generated code |
 | **Activity** | Every agent step, newest first |
-| **Run** | Start and stop the API, open the Swagger docs, and send requests to any endpoint with headers and a JSON body |
+| **Run** (Try it) | Try every action of the API in plain language: actions grouped by data (Create, View, Edit, Delete), a form built from the spec's fields, "Try it as" Anyone / Signed-in user / Admin, and results as a table or a plain-English error. Technical details are one click away. Starts the test copy automatically; **Publish** opens a dialog |
 | **Settings** | App settings |
 | **Assistant** (panel) | The chat, the spec for approval, the rules in plain English, build progress, and the result card with **View code**, **Download code** and **Try it** |
 
@@ -355,7 +355,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Requirements agent on the SDK: plain language, one question at a time, `ask_user` + `submit_requirements`
 - [ ] Short-term memory: chat history, summarised when long
 - [ ] Guardrails: stay on topic, flag unsafe requests
-- [ ] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
+- [x] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
 - [x] Tests and Activity views fed from the Tester's results and the step log
 - [x] Files, Map, Search and Home (editor) views on the generated workspace
 - [ ] Queue and display messages sent during a build
