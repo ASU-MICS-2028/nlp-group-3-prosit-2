@@ -1,0 +1,9 @@
+[Unit]
+Description=Mesora Blocks: watch for published-API route changes
+
+[Path]
+PathModified=/data/coolify/proxy/dynamic/mesora
+Unit=mesora-routes.service
+
+[Install]
+WantedBy=multi-user.target

@@ -34,8 +34,9 @@ http://localhost:8101/docs    running API · tests passing · data saved in SQLi
 11. [Contributing](#contributing)
 12. [Course topics in the system](#course-topics-in-the-system)
 13. [Hosting (planned)](#hosting-planned)
-14. [Baseline: the hand-built prototype](#baseline-the-hand-built-prototype)
-15. [Known limitations](#known-limitations)
+14. [Deploying](#deploying)
+15. [Baseline: the hand-built prototype](#baseline-the-hand-built-prototype)
+16. [Known limitations](#known-limitations)
 
 ---
 
@@ -362,7 +363,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Files, Map, Search and Home (editor) views on the generated workspace
 - [ ] Queue and display messages sent during a build
 - [x] Publish: the user picks a subdomain and gets a permanent URL for the built API (gateway routes by host)
-- [ ] Publish infrastructure: wildcard DNS and TLS, public traffic through the serve sandbox, per-user limits
+- [x] Deploy to the server with a domain (Coolify, mesorablocks.online, HTTPS per published subdomain)
+- [ ] Publish hardening: public traffic through the serve sandbox, real sign-in, per-user limits
 
 **Connect**
 - [ ] Gateway ↔ orchestrator (with Role 2)
@@ -577,6 +579,30 @@ Owned by Role 1. Before it is opened to the public: real sign-in (today the brow
 
 ---
 
+## Deploying
+
+Live at **https://mesorablocks.online** (Role 1 owns this). Published APIs live at `https://<name>.mesorablocks.online`.
+
+| Piece | Where |
+| --- | --- |
+| Server | Hostinger VPS running Coolify (Traefik v3 as the proxy) |
+| App | Coolify application `mesora-blocks`, built from this repo's `Dockerfile`. Network alias `mesora-blocks` |
+| DNS | `mesorablocks.online` and `*.mesorablocks.online` → the server (A records at Hostinger) |
+| HTTPS | Coolify issues the certificate for the main domain. Each published API gets its own Traefik route file (`mesora-<name>.yaml`), so Let's Encrypt issues its certificate on the first visit; no wildcard certificate or DNS API needed |
+| Data | Persistent volume at `/data/workspace` (projects and published snapshots) |
+
+Settings in Coolify: `PUBLISH_URL=https://{sub}.mesorablocks.online`, `TRAEFIK_DYNAMIC_DIR=/traefik-dynamic` (mounted from `/data/coolify/proxy/dynamic/mesora`), `TRAEFIK_SERVICE_URL=http://mesora-blocks:8000`.
+
+Traefik only watches the top level of its dynamic folder, so the app writes routes into its own subfolder and a small systemd watcher copies `mesora-*.yaml` files up (and removes them on unpublish). It touches nothing else. Install it once on the server as root:
+
+```bash
+git clone https://github.com/ASU-MICS-2028/nlp-group-3-prosit-2.git /tmp/mesora && cd /tmp/mesora/deploy && sh install-routes.sh
+```
+
+To redeploy, push to the branch Coolify builds from, or press **Redeploy** in Coolify.
+
+---
+
 ## Baseline: the hand-built prototype
 
 The first prototype used hand-written ReAct loops, a custom LLM wrapper (Gemini or Claude), in-memory storage and the same locked-down sandbox. It is archived on the `feat/agent-pipeline` branch and is no longer maintained.
@@ -591,4 +617,4 @@ It stays useful in two ways: reading it shows what the SDK now does for us, and 
 - The serve sandbox does not yet block outbound network traffic.
 - `SANDBOX=local` gives no isolation.
 - Builds run one at a time per gateway at first.
-- The app runs locally only. Hosting online is planned, not built.
+- The deployed app still uses stub agents, and generated APIs run as plain processes inside the app container until the serve sandbox lands.
