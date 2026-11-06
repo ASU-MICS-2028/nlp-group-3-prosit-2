@@ -604,3 +604,10 @@ button.mnode-name:hover { color: var(--lc); }
 @media (display-mode: standalone) and (max-width: 760px) {
   .topbar { padding-top: calc(env(safe-area-inset-top, 0px) + 10px); }
 }
+
+/* quick replies under the assistant's question */
+.quick-replies { display: flex; flex-wrap: wrap; gap: 8px; align-self: flex-end; justify-content: flex-end; max-width: 92%; animation: in .18s ease-out; }
+.chip-reply { padding: 8px 14px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line-strong));
+  color: var(--accent-ink); background: var(--bg); font-size: 14px; font-weight: 500; transition: background .12s; }
+.chip-reply:hover, .chip-reply:active { background: var(--accent-soft); }
+@media (max-width: 760px) { .chip-reply { padding: 10px 15px; font-size: 15px; } .quick-replies .btn { min-height: 44px; } }

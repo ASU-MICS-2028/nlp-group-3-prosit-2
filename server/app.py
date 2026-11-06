@@ -35,8 +35,13 @@ from pydantic import BaseModel
 from core.codemap import code_map
 from core.events import Event
 from core.state import Message, ProjectState
+from agents import requirements as req_agent
 # Placeholders until the real agents (agents/*) and serve sandbox (core/sandbox) land.
-from server.stubs import architect, build, requirements, serve, stop
+from server.stubs import architect, build, serve, stop
+from server import stubs
+
+# REQUIREMENTS_AGENT=stub replays the golden chat (offline, no model calls)
+requirements = stubs.requirements if os.getenv("REQUIREMENTS_AGENT") == "stub" else req_agent.run
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "ui" / "static"
@@ -129,7 +134,16 @@ def snapshot(s: Session) -> dict:
         "tokens": sum(l.tokens for l in s.state.logs),
         "published": _published_for(s),
         "publish_url": PUBLISH_URL,
+        **_chat_extras(s),
     }
+
+
+def _chat_extras(s: Session) -> dict:
+    """Quick replies for the last question, and the summary waiting for the user's OK."""
+    pending = req_agent.pending_summary(s.state)
+    last = next((l for l in reversed(s.state.logs) if l.agent == "requirements"), None)
+    options = json.loads(last.detail).get("options", []) if last and last.action == "ask" and s.state.requirements is None else []
+    return {"reply_options": options, "pending_summary": pending.model_dump() if pending else None}
 
 
 def _job(s: Session, label: str, fn) -> dict:
@@ -276,6 +290,21 @@ async def chat(body: Text, request: Request):
             await _design(s)
 
     return _job(s, "Thinking...", work)
+
+
+@app.post("/api/requirements/confirm")
+async def confirm_requirements(request: Request):
+    """The "Looks right" button: lock in the pending summary (no model call), then design."""
+    s = sess(request)
+    if req_agent.pending_summary(s.state) is None:
+        raise HTTPException(409, "No summary is waiting for your OK")
+
+    async def work():
+        s.state.chat.append(Message(role="user", content="Looks right."))
+        s.state = await req_agent.confirm(s.state, s.emit)
+        await _design(s)
+
+    return _job(s, "Designing your API...", work)
 
 
 @app.post("/api/spec/change")

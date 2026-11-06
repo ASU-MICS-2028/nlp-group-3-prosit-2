@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("WORKSPACE_DIR", str(tmp_path))
     monkeypatch.setenv("STUB_STEP_DELAY", "0")
+    monkeypatch.setenv("REQUIREMENTS_AGENT", "stub")   # golden replay, no model calls
     (tmp_path / "traefik").mkdir()
     monkeypatch.setenv("TRAEFIK_DYNAMIC_DIR", str(tmp_path / "traefik"))
     import server.stubs
@@ -148,3 +149,31 @@ def test_installable_as_app(client):
     for i in m.json()["icons"]:
         assert client.get(i["src"]).status_code == 200
     assert client.get("/static/offline.html").status_code == 200
+
+
+def test_requirements_agent_through_the_gateway(client, monkeypatch):
+    """Real agent code with a scripted model: question with quick replies, summary, Looks right -> design."""
+    import json as _json
+    import pathlib as _pl
+    import server.app as gw
+    from agents import requirements as R
+    golden = _json.loads(_pl.Path("golden/clinic/requirements.json").read_text())
+    script = iter([("ask_user", {"question": "Who uses it?", "options": ["Patients", "Patients and staff"]}),
+                   ("propose_summary", golden)])
+
+    async def runner(system, prompt, tools, schemas):
+        name, args = next(script)
+        await tools[name](args)
+        return {}
+    monkeypatch.setattr(gw, "requirements", lambda st, emit: R.run(st, emit, runner=runner))
+
+    client.post("/api/chat", json={"text": "I run a clinic"})
+    s = wait_idle(client)
+    assert s["reply_options"] == ["Patients", "Patients and staff"] and s["pending_summary"] is None
+    client.post("/api/chat", json={"text": "Patients and staff"})
+    s = wait_idle(client)
+    assert s["pending_summary"]["project_name"] == golden["project_name"] and s["reply_options"] == []
+    assert client.post("/api/requirements/confirm").status_code == 200
+    s = wait_idle(client)
+    assert s["phase"] == "review" and s["state"]["requirements"]["project_name"] == golden["project_name"]
+    assert client.post("/api/requirements/confirm").status_code == 409   # nothing pending any more

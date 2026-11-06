@@ -109,7 +109,7 @@ flowchart LR
 
 ### The build flow
 
-1. **Understand.** The Requirements agent chats with the user, one question at a time, until it can submit a complete `Requirements` summary.
+1. **Understand.** The Requirements agent chats with the user, one question at a time (with tap-able quick replies), then shows a plain-English summary. The user taps **Looks right** (or says so), and that exact summary becomes the `Requirements`. Off-topic or harmful requests are declined.
 2. **Design.** The Architect turns the requirements into a `Spec`: entities, fields, endpoints, access rules and business rules. `submit_spec` validates it against the schema before accepting it.
 3. **Approve.** The UI shows the spec in plain English. The user approves or requests a change, which goes back to the Architect. **No code is written before approval.**
 4. **Build.** The Coder writes `app/` in the project workspace, calls `run_checks` until everything passes, then calls `finish_build`. The finish gate is enforced in code: `finish_build` is refused until checks have passed since the last file change.
@@ -125,7 +125,7 @@ The SDK runs the Thought → Action → Observation loop for us. For each agent 
 
 | Agent | Goal | Tools | Done when |
 | --- | --- | --- | --- |
-| Requirements | Understand what the user wants | `ask_user`, `submit_requirements` | Requirements validate against the schema |
+| Requirements | Understand what the user wants | `ask_user` (with quick replies), `propose_summary`, `confirm_summary`, `decline` | The user confirms the summary (**Looks right**); the stored draft, already checked against the schema, becomes `state.requirements` |
 | Architect | Turn requirements into a spec | `submit_spec` | Spec validates and the user approves it |
 | Coder | Build the API from the spec | `Read`, `Write`, `Edit`, `Glob`, `Grep` (workspace only), `run_checks`, `search_patterns`, `finish_build` | `finish_build` accepted |
 | Tester | Find bugs | `Read`, `Glob`, `Grep`, `Write` (`tests/` only), `run_tests`, `submit_report` | All tests pass, or report submitted |
@@ -289,7 +289,7 @@ These are what let four people build separately and still fit together. **Changi
 
 - Python 3.10+
 - Docker (running)
-- An Anthropic API key
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) installed and logged in with **your own Claude subscription** (Pro, Max or Team). No API key needed for local work: see [Signing in to Claude](#signing-in-to-claude)
 - Git
 
 ### Setup
@@ -300,13 +300,14 @@ cd nlp-group-3-prosit-2
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 docker build -t prosit-sandbox sandbox/
-cp .env.example .env                                   # then add your API key
+cp .env.example .env                                   # no key needed for local work
+claude                                                 # once: log in with your Claude subscription, then /status to check
 ```
 
 `.env`:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_API_KEY=sk-ant-...   # leave unset locally: if set, it is used (and billed) instead of your subscription
 LLM_MODEL=claude-haiku-5-5      # cheap for development; use claude-sonnet-5-5 for demos and benchmark runs
 MAX_TURNS=30                    # per agent session
 MAX_FIX_ROUNDS=1
@@ -331,6 +332,19 @@ pytest                                      # offline: no API calls, agents use 
 pytest -m live                              # real API calls (costs money)
 python -m eval.benchmark --out results/run.csv
 ```
+
+### Signing in to Claude
+
+The agents run on the Claude Agent SDK, which signs in the same way Claude Code does.
+
+| Where | How | Why |
+| --- | --- | --- |
+| **Your laptop** (development, tests, benchmark runs, the live demo) | Your own Claude subscription: run `claude` once and log in. Usage counts against your plan's limits; no per-token charge | Your own work on your own machine is ordinary subscription use |
+| **The hosted site** (mesorablocks.online) | An API key (`ANTHROPIC_API_KEY` in Coolify). Until we have one, it runs with `REQUIREMENTS_AGENT=stub` (the golden replay) | Anthropic's terms: products that serve other people's requests must use API key authentication, not a subscription login (that includes `claude setup-token`) |
+
+- **`ANTHROPIC_API_KEY` wins.** If it is set in your environment, the SDK uses it and bills the API instead of your subscription. Keep it unset locally; `/status` in Claude Code shows which sign-in is active.
+- **No pay-as-you-go budget?** Max and Team plans include monthly API credits that can be claimed into a Claude Console organization and used through an API key (Pro does not). That is the way to switch the hosted site to the real agents without card billing: put the key in Coolify and delete `REQUIREMENTS_AGENT`. No code changes.
+- Each agent turn has a cost cap (`MAX_TURN_USD`, default $0.10), which also limits how fast a turn can use up plan limits.
 
 ### Keeping costs down
 
@@ -357,9 +371,9 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Gateway: create session, post message, SSE event stream
 - [x] Port the Mesora Blocks UI from the prototype onto the new gateway and event format
 - [x] Assistant panel: chat, spec approval (Approve / Request change), build progress from events, result card
-- [ ] Requirements agent on the SDK: plain language, one question at a time, `ask_user` + `submit_requirements`
+- [x] Requirements agent on the SDK: plain language, one question at a time, quick replies, summary confirmed in code (`agents/requirements.py`)
 - [ ] Short-term memory: chat history, summarised when long
-- [ ] Guardrails: stay on topic, flag unsafe requests
+- [x] Guardrails: stay on topic, flag unsafe requests (`decline` tool; user text is quoted data)
 - [x] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
 - [x] Tests and Activity views fed from the Tester's results and the step log
 - [x] Files, Map, Search and Home (editor) views on the generated workspace
@@ -597,7 +611,7 @@ Live at **https://mesorablocks.online** (Role 1 owns this). Published APIs live 
 | HTTPS | Coolify issues the certificate for the main domain. Each published API gets its own Traefik route file (`mesora-<name>.yaml`), so Let's Encrypt issues its certificate on the first visit; no wildcard certificate or DNS API needed |
 | Data | Persistent volume at `/data/workspace` (projects and published snapshots) |
 
-Settings in Coolify: `PUBLISH_URL=https://{sub}.mesorablocks.online`, `TRAEFIK_DYNAMIC_DIR=/traefik-dynamic` (mounted from `/data/coolify/proxy/dynamic/mesora`), `TRAEFIK_SERVICE_URL=http://mesora-blocks:8000`.
+Settings in Coolify: `REQUIREMENTS_AGENT=stub` until there is an API key (see [Signing in to Claude](#signing-in-to-claude)), `PUBLISH_URL=https://{sub}.mesorablocks.online`, `TRAEFIK_DYNAMIC_DIR=/traefik-dynamic` (mounted from `/data/coolify/proxy/dynamic/mesora`), `TRAEFIK_SERVICE_URL=http://mesora-blocks:8000`.
 
 Traefik only watches the top level of its dynamic folder, so the app writes routes into its own subfolder and a small systemd watcher copies `mesora-*.yaml` files up (and removes them on unpublish). It touches nothing else. Install it once on the server as root:
 
