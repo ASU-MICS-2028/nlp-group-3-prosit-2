@@ -97,6 +97,7 @@ def test_publish_to_subdomain(client, tmp_path):
     r = c.get("/doctors", headers={**live, "X-Role": "user", "X-User-Id": "1"})
     assert r.status_code == 200 and "set-cookie" not in r.headers
     assert c.get("/", headers={"host": "nothing.localhost:8000"}).status_code == 404
+    assert "Mesora Blocks" in c.get("/", headers={"host": "www.localhost:8000"}).text   # reserved names are the app
     route = (tmp_path / "traefik" / "mesora-clinic.yaml").read_text()   # hosted: an HTTPS route per subdomain
     assert "Host(`clinic.localhost`)" in route and "certResolver: letsencrypt" in route
 

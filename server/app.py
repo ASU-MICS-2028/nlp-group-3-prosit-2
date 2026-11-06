@@ -579,6 +579,8 @@ async def published_host(request: Request, call_next):
     host = (request.headers.get("host") or "").split(":")[0].lower()
     if host.endswith(PUBLISH_SUFFIX) and host != PUBLISH_SUFFIX[1:]:
         sub = host[: -len(PUBLISH_SUFFIX)]
+        if sub in RESERVED:   # www.<domain> and friends are the app itself
+            return await call_next(request)
         if sub not in LIVE:
             return Response("No API is published at this address.", status_code=404, media_type="text/plain")
         return await _forward(request, LIVE[sub][1], request.url.path.lstrip("/"))
