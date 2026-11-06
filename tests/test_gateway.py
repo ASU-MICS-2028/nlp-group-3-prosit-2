@@ -136,3 +136,15 @@ def test_api_without_health_check_is_refused(tmp_path):
     (tmp_path / "app" / "main.py").write_text("from fastapi import FastAPI\napp = FastAPI()\n")
     with pytest.raises(RuntimeError, match="health check"):
         asyncio.run(serve(str(tmp_path), ""))
+
+
+def test_installable_as_app(client):
+    sw = client.get("/sw.js")
+    assert sw.status_code == 200 and "javascript" in sw.headers["content-type"] and "/api/" in sw.text
+    m = client.get("/static/site.webmanifest")
+    assert m.headers["content-type"].startswith("application/manifest+json")
+    icons = {(i["sizes"], i.get("purpose", "any")) for i in m.json()["icons"]}
+    assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= icons
+    for i in m.json()["icons"]:
+        assert client.get(i["src"]).status_code == 200
+    assert client.get("/static/offline.html").status_code == 200

@@ -592,3 +592,13 @@ button.mnode-name:hover { color: var(--lc); }
 }
 @keyframes up { from { transform: translateY(24px); opacity: .6; } }
 @keyframes fade { from { opacity: 0; } }
+
+/* install (PWA) */
+.install-btn { padding: 7px 13px; }
+.install-steps { margin: 12px 0 4px; padding-left: 22px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; }
+.share-glyph { display: inline-flex; vertical-align: -4px; color: #0a84ff; }
+.share-glyph i svg { width: 18px; height: 18px; }
+/* installed app on a phone: no browser bar, so respect the notch */
+@media (display-mode: standalone) and (max-width: 760px) {
+  .topbar { padding-top: calc(env(safe-area-inset-top, 0px) + 10px); }
+}
