@@ -102,7 +102,8 @@ def _free_port() -> int:
 
 
 async def serve(workspace: str, root_path: str) -> tuple[subprocess.Popen, int]:
-    """Start the API on 127.0.0.1. root_path is the gateway prefix, so /docs finds its openapi.json."""
+    """Start the API on 127.0.0.1 and wait until GET /health answers 200. root_path is the gateway
+    prefix, so /docs finds its openapi.json. An API without a health check is refused."""
     port = _free_port()
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port), "--root-path", root_path],
@@ -112,10 +113,14 @@ async def serve(workspace: str, root_path: str) -> tuple[subprocess.Popen, int]:
             if proc.poll() is not None:
                 raise RuntimeError(f"API didn't start: {proc.stderr.read()[-500:]}")
             try:
-                await c.get(f"http://127.0.0.1:{port}/openapi.json", timeout=1)
-                return proc, port
+                r = await c.get(f"http://127.0.0.1:{port}/health", timeout=1)
             except httpx.HTTPError:
                 await asyncio.sleep(0.2)
+                continue
+            if r.status_code == 200:
+                return proc, port
+            proc.kill()
+            raise RuntimeError(f"The API's health check failed (GET /health returned {r.status_code}).")
     proc.kill()
     raise RuntimeError("API didn't start in time")
 

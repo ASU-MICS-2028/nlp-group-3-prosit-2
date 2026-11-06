@@ -8,5 +8,5 @@ RUN useradd --create-home --uid 1000 mesora && mkdir -p /data/workspace && chown
 USER mesora
 ENV HOST=0.0.0.0 PORT=8000 WORKSPACE_DIR=/data/workspace PYTHONUNBUFFERED=1
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/favicon.ico')"
+HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 CMD ["python", "-m", "server"]

@@ -34,6 +34,7 @@ def wait_idle(c, timeout=60):
 def test_full_flow(client):
     c = client
     assert c.get("/").status_code == 200 and "sid" in c.cookies
+    assert c.get("/health").json() == {"status": "ok"}
 
     c.post("/api/chat", json={"text": "I run a clinic"})
     s = wait_idle(c)
@@ -62,6 +63,7 @@ def test_full_flow(client):
         assert docs.status_code == 200 and "/api/app/openapi.json" in docs.text
         r = c.get("/api/app/doctors", headers={"X-Role": "user", "X-User-Id": "1"})
         assert r.status_code == 200
+        assert c.get("/api/app/health").json() == {"status": "ok"}
     finally:
         c.post("/api/run/stop")
 
@@ -124,3 +126,13 @@ def test_published_api_survives_restart(client):
     client.__exit__(None, None, None)          # gateway shuts down, published API stops
     with TestClient(app) as fresh:             # and comes back on start-up
         assert fresh.get("/openapi.json", headers={"host": "clinic.localhost"}).status_code == 200
+
+
+def test_api_without_health_check_is_refused(tmp_path):
+    import asyncio
+    from server.stubs import serve
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "main.py").write_text("from fastapi import FastAPI\napp = FastAPI()\n")
+    with pytest.raises(RuntimeError, match="health check"):
+        asyncio.run(serve(str(tmp_path), ""))

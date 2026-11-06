@@ -197,7 +197,7 @@ Every generated project has the same layout. The Coder writes `app/`, the Tester
 workspace/<project>/
 ├── spec.json                 # approved spec (written by the orchestrator)
 ├── app/
-│   ├── main.py               # creates `app = FastAPI(...)`, includes routers, creates tables on startup
+│   ├── main.py               # creates `app = FastAPI(...)`, includes routers, creates tables on startup, GET /health
 │   ├── database.py           # SQLite connection and table setup
 │   ├── dependencies.py       # header-based auth (X-Role, X-User-Id)
 │   ├── schemas/<entity>.py   # <Entity>Create, <Entity>Update, <Entity>
@@ -221,6 +221,8 @@ def get_conn() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 ```
+
+**Every generated API has a health check.** `GET /health` returns `200 {"status": "ok"}`, needs no auth, and is not part of the spec (the platform adds it, so users never have to ask). When the API uses SQLite it runs `SELECT 1` first and returns `503 {"status": "error"}` if the database can't be reached. The platform depends on it: the gateway waits for `/health` before it marks an API as running or published, and refuses an API that doesn't answer it. The golden clinic has one.
 
 Other conventions the Tester relies on: exact methods and paths from the spec, the spec's success status code, `401` for missing or invalid auth, `403` for a user calling an admin endpoint, `404` for unknown ids, `409` for conflicts, `422` for invalid input, ids assigned by the server, and only `fastapi`, `pydantic` and the standard library.
 
@@ -411,6 +413,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Serve sandbox: read-only code, writable `data/`, localhost port, port allocation, idle stop
 - [ ] Block outbound network for the serve sandbox
 - [ ] Coder agent on the SDK: prompt with layout and SQLite conventions
+- [ ] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it
 - [ ] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
 - [ ] Custom tools: `run_checks`, `finish_build` (finish gate)
 - [ ] Check the generated OpenAPI matches the spec
@@ -435,6 +438,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Build**
 - [ ] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
+- [ ] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
 - [ ] Agree the failure-report format with Role 3
 - [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
 - [ ] `search_patterns` tool for the Coder

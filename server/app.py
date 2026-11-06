@@ -194,6 +194,11 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/health", include_in_schema=False)
+def gateway_health():
+    return {"status": "ok"}
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return FileResponse(STATIC / "favicon-32.png", media_type="image/png")

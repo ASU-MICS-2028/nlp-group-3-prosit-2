@@ -36,6 +36,13 @@ def require(level: str):
 USER, ADMIN = require("user"), require("admin")
 
 
+# --- health (every generated API has this; the platform checks it) -------
+
+@app.get("/health", tags=["health"])
+def health():
+    return {"status": "ok"}
+
+
 # --- models -------------------------------------------------------------
 
 class PatientIn(BaseModel):
