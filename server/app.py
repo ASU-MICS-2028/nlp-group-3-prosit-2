@@ -14,6 +14,7 @@ setup, and hosted it needs one wildcard DNS record pointing at this server.
 import asyncio
 import io
 import json
+import mimetypes
 import os
 import re
 import secrets
@@ -175,6 +176,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="Mesora Blocks gateway", lifespan=lifespan)
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -197,6 +199,12 @@ def index():
 @app.get("/health", include_in_schema=False)
 def gateway_health():
     return {"status": "ok"}
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    # served from the root so it controls the whole app; never cached, so updates reach users
+    return FileResponse(STATIC / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/favicon.ico", include_in_schema=False)

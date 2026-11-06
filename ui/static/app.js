@@ -32,6 +32,8 @@ const ICONS = {
   send: '<path d="m22 2-7 20-4-9-9-4 20-7z"/>',
   flask: '<path d="M10 2v7.31M14 9.3V2M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  install: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 7v7m-3-3 3 3 3-3M10 18h4"/>',
+  share: '<path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
 };
 const icon = (name, cls = '') => {
@@ -713,6 +715,8 @@ async function renderSettings() {
       <div class="card"><h4>Agents</h4><p>Set by whoever runs the server (<code>LLM_MODEL</code> and <code>SANDBOX</code> in <code>.env</code>).</p>
         <div class="hint">Model: ${esc(settings.model)} · Sandbox: ${esc(settings.sandbox)}</div>
       </div>
+      ${install.can() ? `<div class="card"><h4>Install the app</h4><p>Put Mesora Blocks on your home screen or desktop. It opens in its own window, like any other app.</p>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="set-install">${icon('install')}Install app</button></div></div>` : ''}
       <div class="card"><h4>Profile</h4>
         <div class="field" style="margin-top:12px"><label>Your name</label><input id="set-name" value="${esc(settings.user_name)}"></div>
       </div>
@@ -903,10 +907,48 @@ async function switchProject(slug) {
   render();
 }
 
+// ---------- install as an app (PWA) ----------
+// Chrome, Edge and Android offer an install prompt; iPhone and iPad Safari don't, so we show how instead.
+const install = {
+  prompt: null,
+  standalone: () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
+  ios: () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+  can() { return !this.standalone() && (!!this.prompt || this.ios()); },
+  show() {
+    const on = this.can();
+    $('#install-btn').hidden = !on || MOBILE.matches;
+    $('#sheet-install').hidden = !on;
+    if (view === 'settings') renderSettings();
+  },
+  init() {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+    addEventListener('beforeinstallprompt', e => { e.preventDefault(); this.prompt = e; this.show(); });
+    addEventListener('appinstalled', () => { this.prompt = null; this.show(); toast('Mesora Blocks is installed'); });
+    MOBILE.addEventListener('change', () => this.show());
+    this.show();
+  },
+  async run() {
+    if (this.prompt) {
+      this.prompt.prompt();
+      await this.prompt.userChoice.catch(() => null);
+      this.prompt = null; return this.show();
+    }
+    document.body.insertAdjacentHTML('beforeend', `<div class="modal-back" id="install-help"><div class="modal" role="dialog" aria-labelledby="ih-title">
+      <div class="modal-head"><h3 id="ih-title">${icon('install')}Add to your home screen</h3>
+        <button class="icon-btn small" id="install-help-close" title="Close">${icon('x')}</button></div>
+      <ol class="install-steps">
+        <li>Tap the <b>Share</b> button <span class="share-glyph">${icon('share')}</span> in Safari's toolbar.</li>
+        <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+        <li>Tap <b>Add</b>. Mesora Blocks appears with your other apps.</li>
+      </ol></div></div>`);
+  },
+};
+
 // ---------- theme / layout ----------
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   localStorage.setItem('theme', t);
+  document.querySelectorAll('meta[name=theme-color]').forEach(m => (m.content = t === 'dark' ? '#17171a' : '#ffffff'));
   $('#theme-btn').innerHTML = icon(t === 'dark' ? 'moon' : 'sun');
 }
 function toggleAssistant(show) {
@@ -918,12 +960,15 @@ function toggleAssistant(show) {
 document.addEventListener('click', async e => {
   if (e.target.id === 'modal-back') { tryState.publishOpen = false; return renderRun(); }
   if (e.target.id === 'more-sheet') return openMore(false);
+  if (e.target.id === 'install-help') return e.target.remove();
   const t = e.target.closest('button, a, .tab, .gutter div, .lines div');
   if (!t) { $('#project-menu').hidden = true; return; }
   if (!t.closest('.project-picker')) $('#project-menu').hidden = true;
 
   if (t.matches('.nav-item, .sheet-item[data-view]')) return setView(t.dataset.view);
   if (t.dataset.tab) return t.dataset.tab === 'more' ? openMore($('#more-sheet').hidden) : setView(t.dataset.tab);
+  if (t.id === 'install-btn' || t.id === 'sheet-install' || t.id === 'set-install') { openMore(false); return install.run(); }
+  if (t.id === 'install-help-close') return $('#install-help')?.remove();
   if (t.id === 'sheet-theme') { openMore(false); return applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); }
   if (t.id === 'sheet-export') openMore(false);
   if (t.id === 'act-picker') { tryState.listOpen = !tryState.listOpen; return renderRun(); }
@@ -1011,7 +1056,7 @@ $('#attach').addEventListener('change', async e => {
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setView('search'); $('#search-input')?.focus(); }
   if (e.key === 'Escape' && tryState.publishOpen) { tryState.publishOpen = false; renderRun(); }
-  if (e.key === 'Escape') openMore(false);
+  if (e.key === 'Escape') { openMore(false); $('#install-help')?.remove(); }
 });
 
 // ---------- boot ----------
@@ -1020,6 +1065,8 @@ document.addEventListener('keydown', e => {
   applyTheme(localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   settings = await api('/api/settings').catch(() => null);
   renderUser();
+  install.init();
+  if (new URLSearchParams(location.search).has('new')) await api('/api/projects/new', { method: 'POST' }).catch(() => null);   // home-screen shortcut
   setView(MOBILE.matches ? 'chat' : 'home');   // on a phone the conversation comes first
   MOBILE.addEventListener('change', () => { if (!MOBILE.matches && document.body.classList.contains('chat-open')) setView('home'); });
   await refresh();

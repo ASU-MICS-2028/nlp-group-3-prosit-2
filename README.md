@@ -364,6 +364,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Tests and Activity views fed from the Tester's results and the step log
 - [x] Files, Map, Search and Home (editor) views on the generated workspace
 - [x] Phone layout: one screen at a time, floating tab bar (Chat, Try it, Tests, Code, More), bottom sheets, works down to iPhone SE
+- [x] Installable app (PWA): manifest with maskable icons, service worker, offline page, Install button (Chrome/Edge/Android) and Add to Home Screen steps (iPhone/iPad)
 - [ ] Queue and display messages sent during a build
 - [x] Publish: the user picks a subdomain and gets a permanent URL for the built API (gateway routes by host)
 - [x] Deploy to the server with a domain (Coolify, mesorablocks.online, HTTPS per published subdomain)

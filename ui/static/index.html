@@ -3,11 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Blocks">
   <title>Mesora Blocks</title>
   <meta name="description" content="Describe the app you need in plain words. Mesora Blocks designs it, builds it, tests it and puts it online.">
-  <meta name="theme-color" content="#f26522">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#17171a" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="icon" href="/static/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -49,6 +52,7 @@
           <div class="menu" id="project-menu" role="menu" hidden></div>
         </div>
         <div class="top-actions">
+          <button class="btn install-btn" id="install-btn" hidden><i data-icon="install"></i>Install app</button>
           <a class="btn export-btn" id="export-btn" href="/api/export" download hidden><i data-icon="download"></i>Download code</a>
           <button class="icon-btn" id="theme-btn" title="Toggle theme"><i data-icon="sun"></i></button>
           <button class="icon-btn boxed" id="panel-btn" title="Toggle assistant"><i data-icon="panel"></i></button>
@@ -109,6 +113,7 @@
       <button data-view="activity" class="sheet-item"><i data-icon="activity"></i>Activity</button>
       <button data-view="settings" class="sheet-item"><i data-icon="settings"></i>Settings</button>
       <div class="sheet-sep"></div>
+      <button class="sheet-item install-item" id="sheet-install" hidden><i data-icon="install"></i>Install app</button>
       <button class="sheet-item" id="sheet-theme"><i data-icon="moon"></i>Switch theme</button>
       <a class="sheet-item" id="sheet-export" href="/api/export" download><i data-icon="download"></i>Download code</a>
     </div>
