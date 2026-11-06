@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Blocks">
   <title>Mesora Blocks</title>
   <meta name="description" content="Describe the app you need in plain words. Mesora Blocks designs it, builds it, tests it and puts it online.">
   <meta name="theme-color" content="#f26522">
@@ -39,6 +41,7 @@
     <!-- Right of sidebar -->
     <div class="main-area">
       <header class="topbar">
+        <span class="logo top-logo" data-icon="logo" aria-hidden="true"></span>
         <div class="project-picker">
           <button class="project-btn" id="project-btn" aria-haspopup="menu">
             <i data-icon="folder"></i><span id="project-name">New project</span><i data-icon="chevronDown" class="muted-icon"></i>
@@ -87,6 +90,27 @@
           </form>
         </section>
       </div>
+    </div>
+  </div>
+  <!-- Mobile: floating tab bar and the "More" sheet -->
+  <nav class="tabbar" aria-label="Main">
+    <button data-tab="chat"><i data-icon="sparkle"></i><span>Chat</span><em class="busy-dot" hidden></em></button>
+    <button data-tab="run"><i data-icon="play"></i><span>Try it</span></button>
+    <button data-tab="tests"><i data-icon="flask"></i><span>Tests</span></button>
+    <button data-tab="home"><i data-icon="code"></i><span>Code</span></button>
+    <button data-tab="more"><i data-icon="list"></i><span>More</span></button>
+  </nav>
+  <div class="sheet-back" id="more-sheet" hidden>
+    <div class="sheet" role="menu" aria-label="More">
+      <div class="sheet-grip"></div>
+      <button data-view="files" class="sheet-item"><i data-icon="folder"></i>Files</button>
+      <button data-view="map" class="sheet-item"><i data-icon="network"></i>Map</button>
+      <button data-view="search" class="sheet-item"><i data-icon="search"></i>Search</button>
+      <button data-view="activity" class="sheet-item"><i data-icon="activity"></i>Activity</button>
+      <button data-view="settings" class="sheet-item"><i data-icon="settings"></i>Settings</button>
+      <div class="sheet-sep"></div>
+      <button class="sheet-item" id="sheet-theme"><i data-icon="moon"></i>Switch theme</button>
+      <a class="sheet-item" id="sheet-export" href="/api/export" download><i data-icon="download"></i>Download code</a>
     </div>
   </div>
   <div class="toast" id="toast" hidden></div>
