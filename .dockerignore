@@ -1,0 +1,9 @@
+.git
+.venv
+.env
+workspace
+**/__pycache__
+.pytest_cache
+docs
+*.png
+!ui/static/*.png

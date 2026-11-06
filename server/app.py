@@ -48,7 +48,9 @@ PUBLISH_SUFFIX = urlsplit(PUBLISH_URL.format(sub="x")).hostname[1:]       # ".lo
 PUBLISHED_DIR = WORKSPACES / "_published"                                 # can't clash with a session id
 REGISTRY = PUBLISHED_DIR / "registry.json"
 SUB_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])")              # 3-32 chars, DNS-safe
-RESERVED = {"www", "api", "app", "admin", "mail", "static", "docs", "status", "dashboard", "prosit", "builder"}
+TRAEFIK_DIR = os.getenv("TRAEFIK_DYNAMIC_DIR")                          # hosted behind Coolify's Traefik
+TRAEFIK_TARGET = os.getenv("TRAEFIK_SERVICE_URL", "http://localhost:8000")  # this gateway, as Traefik reaches it
+RESERVED = {"www", "api", "app", "admin", "mail", "static", "docs", "status", "dashboard", "mesora", "blocks"}
 
 
 class Session:
@@ -161,6 +163,7 @@ async def lifespan(app):
             continue
         try:
             LIVE[sub] = await serve(str(PUBLISHED_DIR / sub), "")
+            _edge_route(sub, True)
         except RuntimeError as e:
             print(f"Could not restart published API {sub}: {e}")
     yield
@@ -171,7 +174,7 @@ async def lifespan(app):
     LIVE.clear()
 
 
-app = FastAPI(title="Prosit Builder gateway", lifespan=lifespan)
+app = FastAPI(title="Mesora Blocks gateway", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -189,6 +192,11 @@ async def session_cookie(request: Request, call_next):
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(STATIC / "favicon-32.png", media_type="image/png")
 
 
 @app.get("/api/state")
@@ -469,6 +477,32 @@ def _published_for(s: Session) -> Optional[dict]:
     return None
 
 
+def _edge_route(sub: str, on: bool) -> None:
+    """Hosted: give each published subdomain its own HTTPS route in Traefik, so Let's Encrypt issues
+    its certificate on the first visit. (A wildcard certificate would need DNS API access instead.)"""
+    if not TRAEFIK_DIR:
+        return
+    f = Path(TRAEFIK_DIR) / f"mesora-{sub}.yaml"   # sub is validated by SUB_RE, safe in a file name and YAML
+    if not on:
+        f.unlink(missing_ok=True)
+        return
+    host = urlsplit(PUBLISH_URL.format(sub=sub)).hostname
+    f.write_text(f"""http:
+  routers:
+    mesora-{sub}:
+      rule: Host(`{host}`)
+      entryPoints: [https]
+      service: mesora-{sub}
+      tls:
+        certResolver: letsencrypt
+  services:
+    mesora-{sub}:
+      loadBalancer:
+        servers:
+          - url: "{TRAEFIK_TARGET}"
+""")
+
+
 def _check(sub: str, s: Session) -> Optional[str]:
     """Why this subdomain can't be used, or None if it can."""
     if not SUB_RE.fullmatch(sub):
@@ -514,6 +548,7 @@ async def publish(body: Publish, request: Request):
     reg[sub] = {"owner": s.root.name, "project": s.state.workspace,
                 "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     _save_registry(reg)
+    _edge_route(sub, True)
     await s.emit(Event(type="status", agent="gateway", detail=f"Published at {PUBLISH_URL.format(sub=sub)}"))
     return snapshot(s)
 
@@ -522,6 +557,7 @@ async def _unpublish(sub: str) -> None:
     if sub in LIVE:
         stop(LIVE.pop(sub))
     shutil.rmtree(PUBLISHED_DIR / sub, ignore_errors=True)
+    _edge_route(sub, False)
     reg = _registry()
     reg.pop(sub, None)
     _save_registry(reg)

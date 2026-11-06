@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("WORKSPACE_DIR", str(tmp_path))
     monkeypatch.setenv("STUB_STEP_DELAY", "0")
+    (tmp_path / "traefik").mkdir()
+    monkeypatch.setenv("TRAEFIK_DYNAMIC_DIR", str(tmp_path / "traefik"))
     import server.stubs
     import server.app
     importlib.reload(server.stubs)
@@ -79,7 +81,7 @@ def build_golden(c):
     return wait_idle(c)
 
 
-def test_publish_to_subdomain(client):
+def test_publish_to_subdomain(client, tmp_path):
     from server.app import app
     c = client
     assert c.post("/api/publish", json={"subdomain": "clinic"}).status_code == 409   # nothing built
@@ -95,6 +97,8 @@ def test_publish_to_subdomain(client):
     r = c.get("/doctors", headers={**live, "X-Role": "user", "X-User-Id": "1"})
     assert r.status_code == 200 and "set-cookie" not in r.headers
     assert c.get("/", headers={"host": "nothing.localhost:8000"}).status_code == 404
+    route = (tmp_path / "traefik" / "mesora-clinic.yaml").read_text()   # hosted: an HTTPS route per subdomain
+    assert "Host(`clinic.localhost`)" in route and "certResolver: letsencrypt" in route
 
     other = TestClient(app)   # another browser can't take or remove it
     assert not other.get("/api/publish/check", params={"sub": "clinic"}).json()["available"]
@@ -105,8 +109,10 @@ def test_publish_to_subdomain(client):
     assert c.get("/doctors", headers=live).status_code == 404
     assert c.get("/openapi.json", headers={"host": "my-clinic.localhost"}).status_code == 200
 
+    assert not (tmp_path / "traefik" / "mesora-clinic.yaml").exists()   # rename removed the old route
     c.delete("/api/publish")
     assert c.get("/api/state").json()["published"] is None
+    assert not list((tmp_path / "traefik").iterdir())
     assert c.get("/openapi.json", headers={"host": "my-clinic.localhost"}).status_code == 404
 
 
