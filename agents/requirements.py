@@ -203,6 +203,8 @@ async def sdk_runner(system: str, prompt: str, tools: dict[str, Tool], schemas: 
         await client.query(prompt)
         async for msg in client.receive_response():
             if isinstance(msg, ResultMessage):
+                if msg.is_error and not msg.subtype.startswith("error_max"):   # e.g. no credentials, provider down
+                    raise RuntimeError(msg.result or msg.subtype)
                 u = msg.usage or {}
                 usage["tokens"] = sum(u.get(k, 0) or 0 for k in ("input_tokens", "output_tokens",
                                       "cache_read_input_tokens", "cache_creation_input_tokens"))
