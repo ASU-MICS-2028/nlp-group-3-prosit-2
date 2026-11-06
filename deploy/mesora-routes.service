@@ -1,0 +1,9 @@
+[Unit]
+Description=Mesora Blocks: copy published-API routes into Traefik
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mesora-routes-sync
+
+[Install]
+WantedBy=multi-user.target

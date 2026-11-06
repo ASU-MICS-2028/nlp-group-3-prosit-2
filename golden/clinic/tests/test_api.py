@@ -56,6 +56,11 @@ def test_every_spec_endpoint_is_implemented():
         assert e.method.lower() in paths.get(e.path, {}), f"missing {e.method} {e.path}"
 
 
+def test_health_check():
+    r = client.get("/health")   # public: no X-Role needed
+    assert r.status_code == 200 and r.json() == {"status": "ok"}
+
+
 # --- happy paths --------------------------------------------------------
 
 def test_patient_register_and_get():

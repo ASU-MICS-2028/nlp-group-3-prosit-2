@@ -4,3 +4,4 @@ __pycache__/
 .env
 project_state.json
 workspace/
+.DS_Store

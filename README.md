@@ -1,6 +1,8 @@
-# PROSIT 2: Plain-Language API Builder
+<img src="ui/static/icon.svg" width="64" alt="Mesora Blocks logo">
 
-ICS554 Natural Language Processing · Ashesi MSc Intelligent Computing Systems · Group 3
+# Mesora Blocks
+
+**PROSIT 2: Plain-Language API Builder** · ICS554 Natural Language Processing · Ashesi MSc Intelligent Computing Systems · Group 3
 
 A non-developer describes a backend in plain words. A team of AI agents built on the **Claude Agent SDK** turns it into a running, tested API with its own SQLite database and a Swagger page to try it out.
 
@@ -14,7 +16,7 @@ Requirements ──► Architect ──► [user approves the plan] ──► Co
 http://localhost:8101/docs    running API · tests passing · data saved in SQLite
 ```
 
-> **Status:** SDK rebuild in progress. Prosit Builder is a web app only (no desktop version). It runs locally for now, and the full version will be hosted online later (see [Hosting](#hosting-planned)). The first hand-built prototype is archived (see [Baseline](#baseline-the-hand-built-prototype)). Commands below describe the target structure; update this file as parts land.
+> **Status:** SDK rebuild in progress. Mesora Blocks is a web app only (no desktop version). It runs locally for now, and the full version will be hosted online later (see [Hosting](#hosting-planned)). The first hand-built prototype is archived (see [Baseline](#baseline-the-hand-built-prototype)). Commands below describe the target structure; update this file as parts land.
 
 ## Contents
 
@@ -32,16 +34,17 @@ http://localhost:8101/docs    running API · tests passing · data saved in SQLi
 11. [Contributing](#contributing)
 12. [Course topics in the system](#course-topics-in-the-system)
 13. [Hosting (planned)](#hosting-planned)
-14. [Baseline: the hand-built prototype](#baseline-the-hand-built-prototype)
-15. [Known limitations](#known-limitations)
+14. [Deploying](#deploying)
+15. [Baseline: the hand-built prototype](#baseline-the-hand-built-prototype)
+16. [Known limitations](#known-limitations)
 
 ---
 
 ## Sample UI
 
-**Prosit Builder** is the target interface. It comes from the hand-built prototype and is the reference Role 1 builds toward for the SDK version.
+**Mesora Blocks** is the target interface. It comes from the hand-built prototype and is the reference Role 1 builds toward for the SDK version.
 
-![Prosit Builder: the Run view with a generated API running in the sandbox, and the Assistant panel showing the spec rules and build steps](docs/screenshots/run-view.png)
+![Mesora Blocks: the Run view with a generated API running in the sandbox, and the Assistant panel showing the spec rules and build steps](docs/screenshots/run-view.png)
 
 *Screenshot from the prototype, which also ran in a desktop window. The SDK version runs in the browser only. The Run view after a build: the API is running in the Docker sandbox on a localhost port, every endpoint can be tried from the left list, and the Assistant panel shows the approved rules and each build step.*
 
@@ -55,7 +58,7 @@ The page has three parts: a sidebar of views, the main panel, and the Assistant 
 | **Tests** | Every test the Tester ran, grouped by file, with the pass count |
 | **Search** | Search inside the generated code |
 | **Activity** | Every agent step, newest first |
-| **Run** | Start and stop the API, open the Swagger docs, and send requests to any endpoint with headers and a JSON body |
+| **Run** (Try it) | Try every action of the API in plain language: actions grouped by data (Create, View, Edit, Delete), a form built from the spec's fields, "Try it as" Anyone / Signed-in user / Admin, and results as a table or a plain-English error. Technical details are one click away. Starts the test copy automatically; **Publish** opens a dialog |
 | **Settings** | App settings |
 | **Assistant** (panel) | The chat, the spec for approval, the rules in plain English, build progress, and the result card with **View code**, **Download code** and **Try it** |
 
@@ -194,7 +197,7 @@ Every generated project has the same layout. The Coder writes `app/`, the Tester
 workspace/<project>/
 ├── spec.json                 # approved spec (written by the orchestrator)
 ├── app/
-│   ├── main.py               # creates `app = FastAPI(...)`, includes routers, creates tables on startup
+│   ├── main.py               # creates `app = FastAPI(...)`, includes routers, creates tables on startup, GET /health
 │   ├── database.py           # SQLite connection and table setup
 │   ├── dependencies.py       # header-based auth (X-Role, X-User-Id)
 │   ├── schemas/<entity>.py   # <Entity>Create, <Entity>Update, <Entity>
@@ -218,6 +221,8 @@ def get_conn() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 ```
+
+**Every generated API has a health check.** `GET /health` returns `200 {"status": "ok"}`, needs no auth, and is not part of the spec (the platform adds it, so users never have to ask). When the API uses SQLite it runs `SELECT 1` first and returns `503 {"status": "error"}` if the database can't be reached. The platform depends on it: the gateway waits for `/health` before it marks an API as running or published, and refuses an API that doesn't answer it. The golden clinic has one.
 
 Other conventions the Tester relies on: exact methods and paths from the spec, the spec's success status code, `401` for missing or invalid auth, `403` for a user calling an admin endpoint, `404` for unknown ids, `409` for conflicts, `422` for invalid input, ids assigned by the server, and only `fastapi`, `pydantic` and the standard library.
 
@@ -261,8 +266,8 @@ These are what let four people build separately and still fit together. **Changi
 │   ├── tools.py             # custom tools (in-process MCP server)
 │   ├── sandbox.py           # docker run for checks, tests and serving
 │   └── scaffold.py          # README, requirements.txt, Dockerfile for generated projects
-├── server/                  # gateway: sessions, messages, SSE
-├── ui/                      # Prosit Builder frontend (static), served by the gateway
+├── server/                  # gateway: sessions, messages, SSE; stubs.py stands in for unfinished agents
+├── ui/                      # Mesora Blocks frontend (static), served by the gateway
 ├── docs/screenshots/        # images used in this README
 ├── sandbox/                 # Dockerfile + check.py
 ├── rag/                     # pattern library, docs index, search tool (Role 4)
@@ -307,12 +312,13 @@ MAX_TURNS=30                    # per agent session
 MAX_FIX_ROUNDS=1
 SANDBOX=docker                  # docker | local (local is NOT isolated)
 SERVE_PORT_RANGE=8100-8199
+PUBLISH_URL=http://{sub}.localhost:8000   # where published APIs live; hosted: https://{sub}.your-domain
 ```
 
 ### Run
 
 ```bash
-python -m server                            # web app at http://localhost:8000
+python -m server                            # web app at http://localhost:8000 (stub agents for now)
 python run.py --golden clinic               # full pipeline on the golden example
 python run.py "I run a small clinic..."     # full pipeline from a prompt, in the terminal
 python run.py --stop-all                    # stop every running generated API
@@ -344,20 +350,23 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 ### Role 1: Interface & Requirements
 
 **Set up**
-- [ ] Write the golden chat transcript
+- [x] Write the golden chat transcript
 - [ ] Define the plain-English labels for the user-facing parts of the spec
 
 **Build** (match the [sample UI](#sample-ui))
-- [ ] Gateway: create session, post message, SSE event stream
-- [ ] Port the Prosit Builder UI from the prototype onto the new gateway and event format
-- [ ] Assistant panel: chat, spec approval (Approve / Request change), build progress from events, result card
+- [x] Gateway: create session, post message, SSE event stream
+- [x] Port the Mesora Blocks UI from the prototype onto the new gateway and event format
+- [x] Assistant panel: chat, spec approval (Approve / Request change), build progress from events, result card
 - [ ] Requirements agent on the SDK: plain language, one question at a time, `ask_user` + `submit_requirements`
 - [ ] Short-term memory: chat history, summarised when long
 - [ ] Guardrails: stay on topic, flag unsafe requests
-- [ ] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
-- [ ] Tests and Activity views fed from the Tester's results and the step log
-- [ ] Files, Map, Search and Home (editor) views on the generated workspace
+- [x] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
+- [x] Tests and Activity views fed from the Tester's results and the step log
+- [x] Files, Map, Search and Home (editor) views on the generated workspace
 - [ ] Queue and display messages sent during a build
+- [x] Publish: the user picks a subdomain and gets a permanent URL for the built API (gateway routes by host)
+- [x] Deploy to the server with a domain (Coolify, mesorablocks.online, HTTPS per published subdomain)
+- [ ] Publish hardening: public traffic through the serve sandbox, real sign-in, per-user limits
 
 **Connect**
 - [ ] Gateway ↔ orchestrator (with Role 2)
@@ -372,7 +381,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Set up**
 - [ ] Lead `ProjectState`, agent format and event format
-- [ ] Write the golden spec
+- [x] Write the golden spec
 
 **Build**
 - [ ] `core/sdk.py`: shared options builder, model and turn limits, logging hook (agent, tool, tokens, cost, time)
@@ -404,6 +413,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Serve sandbox: read-only code, writable `data/`, localhost port, port allocation, idle stop
 - [ ] Block outbound network for the serve sandbox
 - [ ] Coder agent on the SDK: prompt with layout and SQLite conventions
+- [ ] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it
 - [ ] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
 - [ ] Custom tools: `run_checks`, `finish_build` (finish gate)
 - [ ] Check the generated OpenAPI matches the spec
@@ -428,6 +438,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Build**
 - [ ] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
+- [ ] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
 - [ ] Agree the failure-report format with Role 3
 - [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
 - [ ] `search_patterns` tool for the Coder
@@ -560,8 +571,39 @@ For development and the demo, everyone runs the web app locally (`python -m serv
 | API cost | Your own key | One server key, so builds need per-user limits (turns, tokens, builds per day) |
 | Builds | One at a time | Queued per user, with idle serve containers stopped |
 | Connection | HTTP | HTTPS |
+| Published APIs | `http://<name>.localhost:8000` (browsers resolve `*.localhost` to this machine, no setup) | `https://<name>.<our-domain>`: one wildcard DNS record and a wildcard TLS certificate pointing at the gateway |
 
 Practical rule for now: never hard-code `localhost` URLs in the UI or the `BuildResult`. Build them from the gateway's base URL so hosting needs no rewrite.
+
+### Publishing
+
+After a build, the user can **publish** the API from the Run view: they pick a subdomain (3–32 lowercase letters, numbers or dashes; names like `www` and `api` are reserved) and get a permanent URL from `PUBLISH_URL`. The gateway keeps a snapshot of the built `app/` in `workspace/_published/<name>/`, runs it, and routes every request whose host is `<name>.<domain>` to it, with no session cookie. Published APIs restart with the gateway, and rebuilding a project doesn't change its live API until the user clicks **Update**. One subdomain per project; renaming moves it.
+
+Owned by Role 1. Before it is opened to the public: real sign-in (today the browser session owns the name), published APIs running in the serve sandbox (Role 3), and limits on how many APIs each user can publish.
+
+---
+
+## Deploying
+
+Live at **https://mesorablocks.online** (Role 1 owns this). Published APIs live at `https://<name>.mesorablocks.online`.
+
+| Piece | Where |
+| --- | --- |
+| Server | Hostinger VPS running Coolify (Traefik v3 as the proxy) |
+| App | Coolify application `mesora-blocks`, built from this repo's `Dockerfile`. Network alias `mesora-blocks` |
+| DNS | `mesorablocks.online` and `*.mesorablocks.online` → the server (A records at Hostinger) |
+| HTTPS | Coolify issues the certificate for the main domain. Each published API gets its own Traefik route file (`mesora-<name>.yaml`), so Let's Encrypt issues its certificate on the first visit; no wildcard certificate or DNS API needed |
+| Data | Persistent volume at `/data/workspace` (projects and published snapshots) |
+
+Settings in Coolify: `PUBLISH_URL=https://{sub}.mesorablocks.online`, `TRAEFIK_DYNAMIC_DIR=/traefik-dynamic` (mounted from `/data/coolify/proxy/dynamic/mesora`), `TRAEFIK_SERVICE_URL=http://mesora-blocks:8000`.
+
+Traefik only watches the top level of its dynamic folder, so the app writes routes into its own subfolder and a small systemd watcher copies `mesora-*.yaml` files up (and removes them on unpublish). It touches nothing else. Install it once on the server as root:
+
+```bash
+git clone https://github.com/ASU-MICS-2028/nlp-group-3-prosit-2.git /tmp/mesora && cd /tmp/mesora/deploy && sh install-routes.sh
+```
+
+To redeploy, push to the branch Coolify builds from, or press **Redeploy** in Coolify.
 
 ---
 
@@ -579,4 +621,4 @@ It stays useful in two ways: reading it shows what the SDK now does for us, and 
 - The serve sandbox does not yet block outbound network traffic.
 - `SANDBOX=local` gives no isolation.
 - Builds run one at a time per gateway at first.
-- The app runs locally only. Hosting online is planned, not built.
+- The deployed app still uses stub agents, and generated APIs run as plain processes inside the app container until the serve sandbox lands.

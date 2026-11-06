@@ -1,0 +1,7 @@
+#!/bin/sh
+# Mesora Blocks: mirror published-API routes (mesora-*.yaml) from the app's folder into
+# Traefik's watched folder. Traefik ignores subfolders. Only mesora-*.yaml files are touched.
+src=/data/coolify/proxy/dynamic/mesora
+dst=/data/coolify/proxy/dynamic
+for f in "$dst"/mesora-*.yaml; do [ -e "$f" ] || continue; [ -e "$src/${f##*/}" ] || rm -f "$f"; done
+for f in "$src"/mesora-*.yaml; do [ -e "$f" ] || continue; cmp -s "$f" "$dst/${f##*/}" || cp "$f" "$dst/"; done
