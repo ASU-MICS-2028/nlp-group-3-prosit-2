@@ -307,6 +307,7 @@ MAX_TURNS=30                    # per agent session
 MAX_FIX_ROUNDS=1
 SANDBOX=docker                  # docker | local (local is NOT isolated)
 SERVE_PORT_RANGE=8100-8199
+PUBLISH_URL=http://{sub}.localhost:8000   # where published APIs live; hosted: https://{sub}.your-domain
 ```
 
 ### Run
@@ -358,6 +359,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Tests and Activity views fed from the Tester's results and the step log
 - [x] Files, Map, Search and Home (editor) views on the generated workspace
 - [ ] Queue and display messages sent during a build
+- [x] Publish: the user picks a subdomain and gets a permanent URL for the built API (gateway routes by host)
+- [ ] Publish infrastructure: wildcard DNS and TLS, public traffic through the serve sandbox, per-user limits
 
 **Connect**
 - [ ] Gateway ↔ orchestrator (with Role 2)
@@ -560,8 +563,15 @@ For development and the demo, everyone runs the web app locally (`python -m serv
 | API cost | Your own key | One server key, so builds need per-user limits (turns, tokens, builds per day) |
 | Builds | One at a time | Queued per user, with idle serve containers stopped |
 | Connection | HTTP | HTTPS |
+| Published APIs | `http://<name>.localhost:8000` (browsers resolve `*.localhost` to this machine, no setup) | `https://<name>.<our-domain>`: one wildcard DNS record and a wildcard TLS certificate pointing at the gateway |
 
 Practical rule for now: never hard-code `localhost` URLs in the UI or the `BuildResult`. Build them from the gateway's base URL so hosting needs no rewrite.
+
+### Publishing
+
+After a build, the user can **publish** the API from the Run view: they pick a subdomain (3–32 lowercase letters, numbers or dashes; names like `www` and `api` are reserved) and get a permanent URL from `PUBLISH_URL`. The gateway keeps a snapshot of the built `app/` in `workspace/_published/<name>/`, runs it, and routes every request whose host is `<name>.<domain>` to it, with no session cookie. Published APIs restart with the gateway, and rebuilding a project doesn't change its live API until the user clicks **Update**. One subdomain per project; renaming moves it.
+
+Owned by Role 1. Before it is opened to the public: real sign-in (today the browser session owns the name), published APIs running in the serve sandbox (Role 3), and limits on how many APIs each user can publish.
 
 ---
 

@@ -68,5 +68,52 @@ def test_sessions_are_separate(client, tmp_path):
     from server.app import app
     client.post("/api/chat", json={"text": "hello"})
     wait_idle(client)
-    with TestClient(app) as other:
-        assert other.get("/api/state").json()["state"]["chat"] == []
+    other = TestClient(app)   # no `with`: one gateway lifespan, two browsers
+    assert other.get("/api/state").json()["state"]["chat"] == []
+
+
+def build_golden(c):
+    c.post("/api/chat", json={"text": "I run a clinic"}); wait_idle(c)
+    c.post("/api/chat", json={"text": "Patients and staff"}); wait_idle(c)
+    c.post("/api/spec/approve")
+    return wait_idle(c)
+
+
+def test_publish_to_subdomain(client):
+    from server.app import app
+    c = client
+    assert c.post("/api/publish", json={"subdomain": "clinic"}).status_code == 409   # nothing built
+    build_golden(c)
+
+    check = lambda sub: c.get("/api/publish/check", params={"sub": sub}).json()
+    assert check("clinic")["available"]
+    assert not check("www")["available"] and not check("-bad-")["available"] and not check("ab")["available"]
+
+    s = c.post("/api/publish", json={"subdomain": "clinic"}).json()
+    assert s["published"]["url"] == "http://clinic.localhost:8000"
+    live = {"host": "clinic.localhost:8000"}
+    r = c.get("/doctors", headers={**live, "X-Role": "user", "X-User-Id": "1"})
+    assert r.status_code == 200 and "set-cookie" not in r.headers
+    assert c.get("/", headers={"host": "nothing.localhost:8000"}).status_code == 404
+
+    other = TestClient(app)   # another browser can't take or remove it
+    assert not other.get("/api/publish/check", params={"sub": "clinic"}).json()["available"]
+    assert other.delete("/api/publish").status_code == 404
+
+    s = c.post("/api/publish", json={"subdomain": "my-clinic"}).json()   # rename moves it
+    assert s["published"]["subdomain"] == "my-clinic"
+    assert c.get("/doctors", headers=live).status_code == 404
+    assert c.get("/openapi.json", headers={"host": "my-clinic.localhost"}).status_code == 200
+
+    c.delete("/api/publish")
+    assert c.get("/api/state").json()["published"] is None
+    assert c.get("/openapi.json", headers={"host": "my-clinic.localhost"}).status_code == 404
+
+
+def test_published_api_survives_restart(client):
+    from server.app import app
+    build_golden(client)
+    client.post("/api/publish", json={"subdomain": "clinic"})
+    client.__exit__(None, None, None)          # gateway shuts down, published API stops
+    with TestClient(app) as fresh:             # and comes back on start-up
+        assert fresh.get("/openapi.json", headers={"host": "clinic.localhost"}).status_code == 200

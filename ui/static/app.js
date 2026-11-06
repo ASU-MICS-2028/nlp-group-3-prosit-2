@@ -31,6 +31,7 @@ const ICONS = {
   layers: '<path d="m12 2 10 5-10 5L2 7l10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
   send: '<path d="m22 2-7 20-4-9-9-4 20-7z"/>',
   flask: '<path d="M10 2v7.31M14 9.3V2M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
 };
 const icon = (name, cls = '') => {
@@ -141,6 +142,7 @@ let highlightLine = null;
 let busySince = null, lastChatKey = '';
 let settings = null;
 let tryState = { ep: 0, role: 'user', uid: '1', resp: null, sending: false };
+let pubState = { project: null, sub: null, check: null, busy: false };
 
 // ---------- live updates ----------
 // The gateway pushes an event for every agent step (SSE); each one triggers a re-read of /api/state.
@@ -480,6 +482,13 @@ function sampleBody(ep) {
 }
 
 function renderRun() {
+  const focus = document.activeElement?.closest('#view-run') ? document.activeElement : null;
+  const keep = focus && { id: focus.id, start: focus.selectionStart, end: focus.selectionEnd };
+  renderRunInner();
+  const el = keep?.id && document.getElementById(keep.id);
+  if (el) { el.focus(); try { el.setSelectionRange(keep.start, keep.end); } catch {} }
+}
+function renderRunInner() {
   const st = S.state, srv = S.server, eps = st.spec?.endpoints || [];
   const ep = eps[tryState.ep];
   const params = ep ? [...ep.path.matchAll(/\{(\w+)\}/g)].map(m => m[1]) : [];
@@ -494,6 +503,7 @@ function renderRun() {
         ${srv ? `<a class="btn" href="${srv.url}/docs" target="_blank">${icon('external')}Open docs</a><button class="btn" id="run-stop">${icon('stop')}Stop</button>`
           : `<button class="btn primary" id="run-start" ${st.build_ok ? '' : 'disabled'}>${icon('play')}Start API</button>`}
       </div></div>
+      ${st.build_ok ? publishCard() : ''}
       ${eps.length ? `
       <div class="try">
         <div class="ep-list">${eps.map((e, i) => `<button class="ep ${i === tryState.ep ? 'sel' : ''}" data-ep="${i}">
@@ -515,6 +525,70 @@ function renderRun() {
       </div>` : ''}
     </div>`;
 }
+// publish: a permanent URL on the user's own subdomain
+function publishParts() { return (S.publish_url || 'http://{sub}').split('{sub}'); }
+function defaultSub() {
+  return (S.state.spec?.project_name || 'my-api').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
+}
+function publishCard() {
+  const pub = S.published, [pre, post] = publishParts();
+  if (pubState.project !== S.state.workspace) {   // new project: start from its name
+    pubState = { project: S.state.workspace, sub: pub?.subdomain || defaultSub(), check: null, busy: false };
+    setTimeout(checkSub);
+  }
+  return `<div class="card publish"><div class="row">
+      <span class="dot ${pub ? 'on' : ''}"></span>
+      <div style="flex:1;min-width:200px"><h4>${pub ? 'Published' : 'Publish your API'}</h4>
+        <p>${pub ? `Live at <a href="${esc(pub.url)}" target="_blank">${esc(pub.url)}</a> · stays online after you close this page`
+          : 'Give it a permanent web address that anyone can use, even when this page is closed.'}</p></div>
+      ${pub ? `<a class="btn" href="${esc(pub.url)}/docs" target="_blank">${icon('external')}Open</a>
+        <button class="btn" id="pub-copy">Copy URL</button>` : ''}
+    </div>
+    <div class="field" style="margin-top:14px"><label>Web address</label>
+      <div class="sub-input"><span>${esc(pre)}</span><input id="pub-sub" value="${esc(pubState.sub)}" maxlength="32" spellcheck="false" autocomplete="off"><span>${esc(post)}</span></div>
+      <div id="pub-status">${pubStatus()}</div></div>
+    <div class="row" style="margin-top:12px">
+      ${pubButton()}
+      ${pub ? `<button class="btn" id="pub-stop" ${pubState.busy ? 'disabled' : ''}>${icon('stop')}Unpublish</button>` : ''}
+      <span class="hint">${pub ? `Published ${new Date(pub.published_at).toLocaleString()}. Rebuilding doesn't change the live API until you update it.` : 'Anyone with the address can use it.'}</span>
+    </div></div>`;
+}
+function pubStatus() {
+  const c = pubState.check;
+  if (S.published && pubState.sub === S.published.subdomain) return '<span class="hint">Your current address</span>';
+  return !pubState.sub ? '' : c === null ? '<span class="hint">Checking...</span>'
+    : c.available ? `<span class="hint ok-text">${icon('check')}Available</span>` : `<span class="hint bad-text">${esc(c.reason)}</span>`;
+}
+function pubButton() {
+  const pub = S.published, changed = pub && pubState.sub !== pub.subdomain;
+  return `<button class="btn primary" id="pub-go" ${pubState.check?.available && !pubState.busy ? '' : 'disabled'}>${icon('globe')}${
+    pubState.busy ? 'Publishing...' : !pub ? 'Publish' : changed ? 'Move to this address' : 'Update with latest build'}</button>`;
+}
+let pubTimer = null;
+async function checkSub() {   // updates the status and button in place so typing keeps focus
+  const sub = pubState.sub;
+  const r = sub ? await api(`/api/publish/check?sub=${encodeURIComponent(sub)}`).catch(e => ({ available: false, reason: e.message })) : null;
+  if (sub !== pubState.sub) return;
+  pubState.check = r;
+  if ($('#pub-status')) { $('#pub-status').innerHTML = pubStatus(); $('#pub-go').outerHTML = pubButton(); }
+}
+async function publishNow() {
+  pubState.busy = true; renderRun();
+  try { S = await api('/api/publish', { body: { subdomain: pubState.sub } }); toast(`Published at ${S.published.url}`); }
+  catch (e) { toast(e.message); }
+  pubState.busy = false; lastChatKey = ''; render();
+}
+async function unpublishNow() {
+  if (!confirm('Take this API offline? Its address will stop working.')) return;
+  pubState.busy = true; renderRun();
+  try {
+    const r = await fetch('/api/publish', { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).detail || 'Unpublish failed');
+    S = await r.json(); toast('Unpublished');
+  } catch (e) { toast(e.message); }
+  pubState.busy = false; render();
+}
+
 const pretty = s => { try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; } };
 
 async function sendTry() {
@@ -666,6 +740,7 @@ function buildCard() {
       <button class="btn" data-open="app/main.py">${icon('code')}View code</button>
       ${st.tests_ok === false ? `<button class="btn" id="rebuild">${icon('refresh')}Rebuild</button>` : ''}
       <a class="btn" href="/api/export" download>${icon('download')}Download code</a>
+      <button class="btn" id="goto-publish">${icon('globe')}${S.published ? 'Published' : 'Publish'}</button>
       ${S.server ? `<button class="btn primary" id="goto-run">${icon('play')}Try it</button>`
         : `<button class="btn primary" id="start-api">${icon('play')}Start API</button>`}</div>`;
   } else if (failed) {
@@ -792,6 +867,10 @@ document.addEventListener('click', async e => {
   if (t.id === 'run-stop') { S = await api('/api/run/stop', { method: 'POST' }); lastChatKey = ''; return render(); }
   if (t.dataset.ep !== undefined) { tryState.ep = +t.dataset.ep; tryState.resp = null; return renderRun(); }
   if (t.id === 'try-send') return sendTry();
+  if (t.id === 'pub-go') return publishNow();
+  if (t.id === 'pub-stop') return unpublishNow();
+  if (t.id === 'pub-copy') { navigator.clipboard?.writeText(S.published.url); return toast('URL copied'); }
+  if (t.id === 'goto-publish') return setView('run');
   if (t.id === 'set-save') return saveSettings();
   if (t.id === 'attach-btn') return $('#attach').click();
 });
@@ -808,6 +887,11 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'search-input') { clearTimeout(searchTimer); searchTimer = setTimeout(() => doSearch(e.target.value), 200); }
   if (e.target.id === 'try-uid') tryState.uid = e.target.value;
+  if (e.target.id === 'pub-sub') {
+    pubState.sub = e.target.value.toLowerCase(); pubState.check = null;
+    $('#pub-status').innerHTML = pubStatus(); $('#pub-go').outerHTML = pubButton();
+    clearTimeout(pubTimer); pubTimer = setTimeout(checkSub, 250);
+  }
 });
 
 $('#composer').addEventListener('submit', e => { e.preventDefault(); send($('#input').value); });

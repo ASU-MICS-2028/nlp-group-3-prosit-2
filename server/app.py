@@ -6,6 +6,10 @@ Each browser gets a session (cookie). Agent work runs as an asyncio task and eve
 pushed to the page over Server-Sent Events (GET /api/events); the page then re-reads
 GET /api/state. The running generated API is reached through /api/app/..., never a
 localhost port, so the same code works when hosted.
+
+Publishing gives a built API a permanent home at its own subdomain (PUBLISH_URL). The gateway
+routes requests by Host header, so locally http://<name>.localhost:8000 works with no DNS
+setup, and hosted it needs one wildcard DNS record pointing at this server.
 """
 import asyncio
 import io
@@ -14,9 +18,12 @@ import os
 import re
 import secrets
 import zipfile
+import shutil
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -36,6 +43,12 @@ WORKSPACES = Path(os.getenv("WORKSPACE_DIR", ROOT / "workspace")).resolve()
 APP_PREFIX = "/api/app"   # where the running generated API is proxied
 SID_RE = re.compile(r"[A-Za-z0-9_-]{16,64}")
 SKIP = {"__pycache__", ".pytest_cache", "data", "state.json"}
+PUBLISH_URL = os.getenv("PUBLISH_URL", "http://{sub}.localhost:8000")   # {sub} is the user's subdomain
+PUBLISH_SUFFIX = urlsplit(PUBLISH_URL.format(sub="x")).hostname[1:]       # ".localhost"
+PUBLISHED_DIR = WORKSPACES / "_published"                                 # can't clash with a session id
+REGISTRY = PUBLISHED_DIR / "registry.json"
+SUB_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])")              # 3-32 chars, DNS-safe
+RESERVED = {"www", "api", "app", "admin", "mail", "static", "docs", "status", "dashboard", "prosit", "builder"}
 
 
 class Session:
@@ -111,6 +124,8 @@ def snapshot(s: Session) -> dict:
         "server": {"url": APP_PREFIX} if s.server else None,
         "model": os.getenv("LLM_MODEL", "stub agents"),
         "tokens": sum(l.tokens for l in s.state.logs),
+        "published": _published_for(s),
+        "publish_url": PUBLISH_URL,
     }
 
 
@@ -141,9 +156,19 @@ def _job(s: Session, label: str, fn) -> dict:
 
 @asynccontextmanager
 async def lifespan(app):
+    for sub in _registry():   # published APIs come back after a restart
+        if sub in LIVE:
+            continue
+        try:
+            LIVE[sub] = await serve(str(PUBLISHED_DIR / sub), "")
+        except RuntimeError as e:
+            print(f"Could not restart published API {sub}: {e}")
     yield
     for s in SESSIONS.values():
         _stop_server(s)
+    for handle in LIVE.values():
+        stop(handle)
+    LIVE.clear()
 
 
 app = FastAPI(title="Prosit Builder gateway", lifespan=lifespan)
@@ -398,22 +423,130 @@ def stop_api(request: Request):
 HOP = {"host", "cookie", "content-length", "connection", "accept-encoding"}
 
 
-@app.api_route(APP_PREFIX + "/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def proxy(path: str, request: Request):
-    """Forward to this session's running API. The gateway's cookie is never passed on."""
-    s = sess(request)
-    if not s.server:
-        raise HTTPException(409, "Start the API first")
-    url = f"http://127.0.0.1:{s.server[1]}/{path}"
+async def _forward(request: Request, port: int, path: str) -> Response:
+    """Send the request on to an API on 127.0.0.1. The gateway's cookie is never passed on."""
     headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP}
     async with httpx.AsyncClient() as c:
         try:
-            r = await c.request(request.method, url, params=request.query_params, headers=headers,
-                                content=await request.body(), timeout=15)
+            r = await c.request(request.method, f"http://127.0.0.1:{port}/{path}", params=request.query_params,
+                                headers=headers, content=await request.body(), timeout=15)
         except httpx.HTTPError as e:
-            raise HTTPException(502, f"Request failed: {e}")
+            return Response(f"Request failed: {e}", status_code=502)
     keep = {k: v for k, v in r.headers.items() if k.lower() in ("content-type", "location")}
     return Response(r.content, status_code=r.status_code, headers=keep)
+
+
+@app.api_route(APP_PREFIX + "/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def proxy(path: str, request: Request):
+    """Forward to this session's running API (the Run view's "try it")."""
+    s = sess(request)
+    if not s.server:
+        raise HTTPException(409, "Start the API first")
+    return await _forward(request, s.server[1], path)
+
+
+# ---------- publish: a permanent URL at <subdomain>PUBLISH_SUFFIX ----------
+# ponytail: the session cookie stands in for an account, so whoever holds it owns the subdomain;
+# real sign-in, per-user limits and the serve sandbox for public traffic come with hosting.
+
+LIVE: dict[str, tuple] = {}   # subdomain -> handle of the running published API
+
+
+def _registry() -> dict:
+    return json.loads(REGISTRY.read_text()) if REGISTRY.exists() else {}
+
+
+def _save_registry(reg: dict) -> None:
+    PUBLISHED_DIR.mkdir(parents=True, exist_ok=True)
+    REGISTRY.write_text(json.dumps(reg, indent=1))
+
+
+def _published_for(s: Session) -> Optional[dict]:
+    d = _project_dir(s)
+    for sub, e in _registry().items():
+        if d and e["owner"] == s.root.name and e["project"] == str(d):
+            return {"subdomain": sub, "url": PUBLISH_URL.format(sub=sub), "published_at": e["published_at"]}
+    return None
+
+
+def _check(sub: str, s: Session) -> Optional[str]:
+    """Why this subdomain can't be used, or None if it can."""
+    if not SUB_RE.fullmatch(sub):
+        return "Use 3-32 lowercase letters, numbers or dashes, starting and ending with a letter or number."
+    if sub in RESERVED:
+        return "That name is reserved."
+    e = _registry().get(sub)
+    if e and not (e["owner"] == s.root.name and e["project"] == str(_project_dir(s))):
+        return "That name is taken."
+    return None
+
+
+@app.get("/api/publish/check")
+def publish_check(sub: str, request: Request):
+    reason = _check(sub.strip().lower(), sess(request))
+    return {"available": reason is None, "reason": reason}
+
+
+class Publish(BaseModel):
+    subdomain: str
+
+
+@app.post("/api/publish")
+async def publish(body: Publish, request: Request):
+    """Publish (or update) the current build. The live copy is a snapshot: later builds change it only when published again."""
+    s, sub = sess(request), body.subdomain.strip().lower()
+    if not s.state.build_ok or not s.state.workspace:
+        raise HTTPException(409, "Build the API first")
+    if reason := _check(sub, s):
+        raise HTTPException(422, reason)
+    old = _published_for(s)
+    if old:   # one subdomain per project: updating or renaming replaces the old one
+        await _unpublish(old["subdomain"])
+    dest = PUBLISHED_DIR / sub
+    shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(Path(s.state.workspace) / "app", dest / "app", ignore=shutil.ignore_patterns("__pycache__"))
+    try:
+        LIVE[sub] = await serve(str(dest), "")
+    except RuntimeError as e:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise HTTPException(500, str(e))
+    reg = _registry()
+    reg[sub] = {"owner": s.root.name, "project": s.state.workspace,
+                "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    _save_registry(reg)
+    await s.emit(Event(type="status", agent="gateway", detail=f"Published at {PUBLISH_URL.format(sub=sub)}"))
+    return snapshot(s)
+
+
+async def _unpublish(sub: str) -> None:
+    if sub in LIVE:
+        stop(LIVE.pop(sub))
+    shutil.rmtree(PUBLISHED_DIR / sub, ignore_errors=True)
+    reg = _registry()
+    reg.pop(sub, None)
+    _save_registry(reg)
+
+
+@app.delete("/api/publish")
+async def unpublish(request: Request):
+    s = sess(request)
+    cur = _published_for(s)
+    if not cur:
+        raise HTTPException(404, "Not published")
+    await _unpublish(cur["subdomain"])
+    return snapshot(s)
+
+
+@app.middleware("http")
+async def published_host(request: Request, call_next):
+    """Requests to <sub>PUBLISH_SUFFIX go straight to that published API, with no session."""
+    host = (request.headers.get("host") or "").split(":")[0].lower()
+    if host.endswith(PUBLISH_SUFFIX) and host != PUBLISH_SUFFIX[1:]:
+        sub = host[: -len(PUBLISH_SUFFIX)]
+        if sub not in LIVE:
+            return Response("No API is published at this address.", status_code=404, media_type="text/plain")
+        return await _forward(request, LIVE[sub][1], request.url.path.lstrip("/"))
+    return await call_next(request)
 
 
 # ---------- settings ----------

@@ -392,3 +392,14 @@ button.mnode-name:hover { color: var(--lc); }
 .tdot.passed { background: var(--ok); } .tdot.failed, .tdot.error { background: var(--bad); }
 .toutcome { margin-left: auto; font-size: 11.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; flex: none; }
 .toutcome.failed, .toutcome.error { color: var(--bad); font-weight: 600; }
+
+/* publish */
+.sub-input { display: flex; align-items: center; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--bg); overflow: hidden; font: 13.5px var(--mono); }
+.sub-input:focus-within { border-color: var(--accent); }
+.sub-input span { padding: 9px 0; color: var(--muted); white-space: nowrap; }
+.sub-input span:first-child { padding-left: 11px; }
+.sub-input span:last-child { padding-right: 11px; }
+.field .sub-input input { border: 0; border-radius: 0; padding: 9px 2px; min-width: 60px; flex: 1; font: inherit; color: var(--text); }
+.ok-text { color: var(--ok); display: inline-flex; gap: 4px; align-items: center; }
+.ok-text i svg { width: 14px; height: 14px; }
+.bad-text { color: var(--bad); }
