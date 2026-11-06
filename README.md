@@ -109,7 +109,7 @@ flowchart LR
 
 ### The build flow
 
-1. **Understand.** The Requirements agent chats with the user, one question at a time, until it can submit a complete `Requirements` summary.
+1. **Understand.** The Requirements agent chats with the user, one question at a time (with tap-able quick replies), then shows a plain-English summary. The user taps **Looks right** (or says so), and that exact summary becomes the `Requirements`. Off-topic or harmful requests are declined.
 2. **Design.** The Architect turns the requirements into a `Spec`: entities, fields, endpoints, access rules and business rules. `submit_spec` validates it against the schema before accepting it.
 3. **Approve.** The UI shows the spec in plain English. The user approves or requests a change, which goes back to the Architect. **No code is written before approval.**
 4. **Build.** The Coder writes `app/` in the project workspace, calls `run_checks` until everything passes, then calls `finish_build`. The finish gate is enforced in code: `finish_build` is refused until checks have passed since the last file change.
@@ -125,7 +125,7 @@ The SDK runs the Thought → Action → Observation loop for us. For each agent 
 
 | Agent | Goal | Tools | Done when |
 | --- | --- | --- | --- |
-| Requirements | Understand what the user wants | `ask_user`, `submit_requirements` | Requirements validate against the schema |
+| Requirements | Understand what the user wants | `ask_user` (with quick replies), `propose_summary`, `confirm_summary`, `decline` | The user confirms the summary (**Looks right**); the stored draft, already checked against the schema, becomes `state.requirements` |
 | Architect | Turn requirements into a spec | `submit_spec` | Spec validates and the user approves it |
 | Coder | Build the API from the spec | `Read`, `Write`, `Edit`, `Glob`, `Grep` (workspace only), `run_checks`, `search_patterns`, `finish_build` | `finish_build` accepted |
 | Tester | Find bugs | `Read`, `Glob`, `Grep`, `Write` (`tests/` only), `run_tests`, `submit_report` | All tests pass, or report submitted |
@@ -357,9 +357,9 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Gateway: create session, post message, SSE event stream
 - [x] Port the Mesora Blocks UI from the prototype onto the new gateway and event format
 - [x] Assistant panel: chat, spec approval (Approve / Request change), build progress from events, result card
-- [ ] Requirements agent on the SDK: plain language, one question at a time, `ask_user` + `submit_requirements`
+- [x] Requirements agent on the SDK: plain language, one question at a time, quick replies, summary confirmed in code (`agents/requirements.py`)
 - [ ] Short-term memory: chat history, summarised when long
-- [ ] Guardrails: stay on topic, flag unsafe requests
+- [x] Guardrails: stay on topic, flag unsafe requests (`decline` tool; user text is quoted data)
 - [x] Run view: start/stop, open docs, try any endpoint; auth fields generated from the spec's access rules
 - [x] Tests and Activity views fed from the Tester's results and the step log
 - [x] Files, Map, Search and Home (editor) views on the generated workspace

@@ -77,7 +77,7 @@ function md(text) {
   for (const raw of lines) {
     const line = raw.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
     if (/^\s*[-•*]\s+/.test(line)) {
-      if (!inList) { html += '<ul>'; inList = true; }
+      if (!inList) { html = html.replace(/<br>$/, '') + '<ul>'; inList = true; }   // no blank line above a list
       html += `<li>${line.replace(/^\s*[-•*]\s+/, '')}</li>`;
     } else {
       if (inList) { html += '</ul>'; inList = false; }
@@ -784,6 +784,13 @@ function renderChat() {
   if (S.busy && !(st.spec_approved && S.busy.startsWith('Building'))) {
     html += `<div class="typing"><div class="dots"><span></span><span></span><span></span></div>${esc(S.busy)} <span class="elapsed"></span></div>`;
   }
+  if (!S.busy && S.phase === 'chat') {   // what the person can tap instead of typing
+    if (S.pending_summary) html += `<div class="quick-replies">
+      <button class="btn primary" id="confirm-req">${icon('check')}Looks right</button>
+      <button class="btn" id="change-req">Change something</button></div>`;
+    else if (S.reply_options?.length) html += `<div class="quick-replies">${S.reply_options.map(o =>
+      `<button class="chip-reply" data-reply="${esc(o)}">${esc(o)}</button>`).join('')}</div>`;
+  }
   if (S.error) html += `<div class="msg error">${icon('alert')}<div><b>Something went wrong.</b><br>${esc(S.error)}</div></div>`;
   el.innerHTML = html;
   updateElapsed();
@@ -999,6 +1006,9 @@ document.addEventListener('click', async e => {
     return $('#input').focus();
   }
   if (t.id === 'approve') return act('/api/spec/approve');
+  if (t.dataset.reply !== undefined) return send(t.dataset.reply);
+  if (t.id === 'confirm-req') return act('/api/requirements/confirm');
+  if (t.id === 'change-req') { $('#input').focus(); return toast('Tell me what to change, in your own words.'); }
   if (t.id === 'request-change') { $('#input').focus(); return toast('Type the change you want below and press Enter.'); }
   if (t.id === 'rebuild') return act('/api/build');
   if (t.id === 'goto-run') return setView('run');
