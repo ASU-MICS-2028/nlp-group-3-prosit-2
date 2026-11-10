@@ -14,8 +14,10 @@ def client(tmp_path, monkeypatch):
     (tmp_path / "traefik").mkdir()
     monkeypatch.setenv("TRAEFIK_DYNAMIC_DIR", str(tmp_path / "traefik"))
     import server.stubs
+    import agents.orchestrator
     import server.app
     importlib.reload(server.stubs)
+    importlib.reload(agents.orchestrator)   # picks its agents from the env vars above
     gw = importlib.reload(server.app)
     with TestClient(gw.app) as c:
         yield c
@@ -155,7 +157,7 @@ def test_requirements_agent_through_the_gateway(client, monkeypatch):
     """Real agent code with a scripted model: question with quick replies, summary, Looks right -> design."""
     import json as _json
     import pathlib as _pl
-    import server.app as gw
+    from agents import orchestrator
     from agents import requirements as R
     golden = _json.loads(_pl.Path("golden/clinic/requirements.json").read_text())
     script = iter([("ask_user", {"question": "Who uses it?", "options": ["Patients", "Patients and staff"]}),
@@ -165,7 +167,7 @@ def test_requirements_agent_through_the_gateway(client, monkeypatch):
         name, args = next(script)
         await tools[name](args)
         return {}
-    monkeypatch.setattr(gw, "requirements", lambda st, emit: R.run(st, emit, runner=runner))
+    monkeypatch.setitem(orchestrator.AGENTS, "requirements", lambda st, emit: R.run(st, emit, runner=runner))
 
     client.post("/api/chat", json={"text": "I run a clinic"})
     s = wait_idle(client)

@@ -4,8 +4,8 @@ They replay the golden clinic example: the requirements stub asks one question a
 summarises, the architect returns the golden spec, and the build copies the golden code and
 runs its real tests. Each follows the agent format `async def run(state, emit) -> state`.
 
-Swap the imports in server/app.py for the real ones as they land:
-requirements (Role 1), architect + orchestrator build (Role 2), serve sandbox (Role 3).
+agents/orchestrator.py picks which agent does each job (its AGENTS table). Swap in the real
+coder (Role 3) and tester (Role 4) there as they land, and the serve sandbox (Role 3) in server/app.py.
 """
 import asyncio
 import json
@@ -60,20 +60,23 @@ async def architect(state: ProjectState, emit: Emit) -> ProjectState:
 RESULT_RE = re.compile(r"^(PASSED|FAILED|ERROR|SKIPPED) (\S+?)::(\S+)", re.M)
 
 
-async def build(state: ProjectState, emit: Emit) -> ProjectState:
+async def coder(state: ProjectState, emit: Emit) -> ProjectState:
+    """Placeholder Coder (Role 3 replaces it): copies the golden code into app/."""
     ws = Path(state.workspace)
-    state.build_ok, state.tests_ok, state.test_report, state.test_summary, state.test_results = False, None, None, "", []
-    await _step(state, emit, "orchestrator", "build", "Build started")
     shutil.rmtree(ws / "app", ignore_errors=True)
-    shutil.rmtree(ws / "tests", ignore_errors=True)
-    ignore = shutil.ignore_patterns("__pycache__")
-    shutil.copytree(GOLDEN / "app", ws / "app", ignore=ignore)
+    shutil.copytree(GOLDEN / "app", ws / "app", ignore=shutil.ignore_patterns("__pycache__"))
     await _step(state, emit, "coder", "write_file", "app/main.py")
     await _step(state, emit, "coder", "run_checks", "App imports and starts")
     await _step(state, emit, "coder", "finish", "Checks passed")
     state.build_ok = True
+    return state
 
-    shutil.copytree(GOLDEN / "tests", ws / "tests", ignore=ignore)
+
+async def tester(state: ProjectState, emit: Emit) -> ProjectState:
+    """Placeholder Tester (Role 4 replaces it): copies the golden tests into tests/ and runs them for real."""
+    ws = Path(state.workspace)
+    shutil.rmtree(ws / "tests", ignore_errors=True)
+    shutil.copytree(GOLDEN / "tests", ws / "tests", ignore=shutil.ignore_patterns("__pycache__"))
     for f in ("conftest.py", "chat.json", "requirements.json", "spec.json"):  # the golden tests read these
         shutil.copy(GOLDEN / f, ws / f)
     await _step(state, emit, "tester", "write_test", "tests/test_api.py")
@@ -84,11 +87,9 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
     state.test_results = [{"file": f, "name": n, "outcome": o.lower()} for o, f, n in RESULT_RE.findall(out)]
     state.test_summary = out.strip().splitlines()[-1].strip("= ") if out.strip() else "no output"
     state.tests_ok = proc.returncode == 0
-    if not state.tests_ok:
-        state.test_report = out[-3000:]
+    state.test_report = None if state.tests_ok else out[-3000:]
     await _step(state, emit, "tester", "run_tests", state.test_summary)
     await emit(Event(type="test", agent="tester", detail=state.test_summary, data={"ok": state.tests_ok}))
-    await emit(Event(type="result", agent="orchestrator", detail="Build finished", data={"build_ok": True, "tests_ok": state.tests_ok}))
     return state
 
 
