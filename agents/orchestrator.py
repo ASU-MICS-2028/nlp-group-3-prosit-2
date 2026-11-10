@@ -20,7 +20,7 @@ from pathlib import Path
 
 from agents import architect, requirements
 from core.events import Emit, Event
-from core.state import LogEntry, ProjectState
+from core.state import BuildResult, LogEntry, ProjectState
 from server import stubs
 
 MAX_FIX_ROUNDS = int(os.getenv("MAX_FIX_ROUNDS", "1"))
@@ -75,6 +75,7 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
         raise RuntimeError("Approve the spec before building.")
     await emit(Event(type="status", agent="orchestrator", detail="Building your API..."))
     state.build_ok, state.tests_ok, state.test_report, state.test_summary, state.test_results = False, None, None, "", []
+    state.failures, state.result = [], None
     await step(state, emit, "build", "Build started")
 
     # Coder first. Only test code that passed the Coder's own checks.
@@ -90,6 +91,9 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
         await step(state, emit, "fix_round", f"Fix round {rounds} of {MAX_FIX_ROUNDS}")
         state = await fix_round(state, emit)
 
+    # The BuildResult: what the user gets. The gateway adds base_url and docs_url when it starts the API.
+    state.result = BuildResult(endpoints=[f"{e.method} {e.path}" for e in state.spec.endpoints],
+                               test_summary=state.test_summary, known_failures=state.failures)
     write_log(state)
     await emit(Event(type="result", agent="orchestrator", detail="Build finished",
                      data={"build_ok": state.build_ok, "tests_ok": state.tests_ok}))
@@ -99,7 +103,7 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
 async def fix_round(state: ProjectState, emit: Emit) -> ProjectState:
     """One fix attempt. If the Coder's fix breaks the build, put the last working code back."""
     app = Path(state.workspace) / "app"
-    results_before = {k: getattr(state, k) for k in ("tests_ok", "test_summary", "test_results", "test_report")}
+    results_before = {k: getattr(state, k) for k in ("tests_ok", "test_summary", "test_results", "test_report", "failures")}
 
     with tempfile.TemporaryDirectory() as tmp:
         backup = Path(tmp) / "app"

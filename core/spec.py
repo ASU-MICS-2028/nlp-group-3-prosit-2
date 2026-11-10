@@ -47,6 +47,15 @@ class Endpoint(BaseModel):
     status_code: int = 200
 
 
+class Failure(BaseModel):
+    """One failing test, reported by the Tester to the Coder. A failure report is a list of these."""
+    endpoint: str             # e.g. "POST /appointments"
+    test: str                 # test name, e.g. "test_double_booking_is_rejected"
+    expected: str             # e.g. "409"
+    got: str                  # e.g. "201"
+    hint: str = ""            # the Tester's guess at the cause
+
+
 class Spec(BaseModel):
     """The API spec. Output of the architect agent, input to the coder."""
     project_name: str

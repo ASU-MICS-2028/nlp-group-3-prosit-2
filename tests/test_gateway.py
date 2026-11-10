@@ -61,6 +61,7 @@ def test_full_flow(client):
     assert c.get("/api/app/docs").status_code == 409            # not started yet
     s = c.post("/api/run").json()
     assert s["server"]["url"] == "/api/app"
+    assert s["state"]["result"]["docs_url"] == "/api/app/docs" and s["state"]["result"]["endpoints"]
     try:
         docs = c.get("/api/app/docs")
         assert docs.status_code == 200 and "/api/app/openapi.json" in docs.text

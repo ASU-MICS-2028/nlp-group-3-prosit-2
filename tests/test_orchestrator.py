@@ -5,11 +5,12 @@ import json
 import pytest
 
 from agents import orchestrator as O
-from core.spec import Requirements, Spec
+from core.spec import Failure, Requirements, Spec
 from core.state import ProjectState
 
 REQ = Requirements(project_name="Shop", description="", users=[], data=[], actions=[])
-SPEC = Spec(project_name="Shop", description="", entities=[], endpoints=[])
+SPEC = Spec(project_name="Shop", description="", entities=[],
+            endpoints=[{"method": "GET", "path": "/items", "summary": "List items"}])
 EVENTS = []
 
 
@@ -36,6 +37,8 @@ def fake_agents(monkeypatch, tests_pass, coder_breaks=()):
         state.tests_ok = tests_pass[n]
         state.test_summary = "all passed" if state.tests_ok else "1 failed"
         state.test_report = None if state.tests_ok else "test_booking failed"
+        state.failures = [] if state.tests_ok else [
+            Failure(endpoint="POST /bookings", test="test_booking", expected="409", got="201")]
         return state
 
     async def architect(state, emit):
@@ -69,6 +72,8 @@ def test_tests_pass_first_time(tmp_path, monkeypatch):
     assert calls == ["coder", "tester"]                      # no fix round needed
     assert st.build_ok and st.tests_ok
     assert EVENTS[-1].type == "result"
+    assert st.result.endpoints == ["GET /items"] and st.result.test_summary == "all passed"
+    assert st.result.known_failures == []
 
 
 def test_failure_goes_back_to_the_coder_once(tmp_path, monkeypatch):
@@ -84,6 +89,7 @@ def test_fix_rounds_stop_at_the_limit(tmp_path, monkeypatch):
     st = asyncio.run(O.build(approved(tmp_path), emit))
     assert calls.count("coder") == 3                          # first try + 2 fix rounds, then stop
     assert st.tests_ok is False and st.test_report == "test_booking failed"   # failures reported honestly
+    assert [f.test for f in st.result.known_failures] == ["test_booking"]
 
 
 def test_a_fix_that_breaks_the_build_is_undone(tmp_path, monkeypatch):

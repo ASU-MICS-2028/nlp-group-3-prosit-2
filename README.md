@@ -238,9 +238,9 @@ These are what let four people build separately and still fit together. **Changi
 | `Requirements`, `Spec` | `core/spec.py` | Data, endpoints, access rules and business rules |
 | Agent format | every `agents/*.py` | `async def run(state: ProjectState, emit: Emit) -> ProjectState`. Each agent appends at least one `LogEntry`. |
 | Event format | `core/events.py` | `{"type": "status" \| "step" \| "spec" \| "test" \| "result" \| "error", "agent": str, "detail": str, "data": {}}`, streamed to the UI |
-| Tool format | `core/tools.py` | SDK `@tool` functions in one in-process MCP server named `prosit`. Agents see them as `mcp__prosit__<name>`. |
-| Failure report | `core/spec.py` | List of `{endpoint, test, expected, got, hint}` from Tester to Coder |
-| `BuildResult` | `core/state.py` | `base_url`, `docs_url`, `endpoints`, `test_summary`, `known_failures` |
+| Tool format | `core/sdk.py` | Each agent defines its tools as Python functions; `run_agent()` serves them as one in-process MCP server named `prosit`. Agents see them as `mcp__prosit__<name>`. |
+| Failure report | `core/spec.py` | List of `Failure` `{endpoint, test, expected, got, hint}` from Tester to Coder, in `state.failures` (and as text in `state.test_report` for the UI) |
+| `BuildResult` | `core/state.py` | `base_url`, `docs_url`, `endpoints`, `test_summary`, `known_failures`. Set by the orchestrator in `state.result`; the gateway adds the URLs when the API starts |
 
 ### Golden example
 

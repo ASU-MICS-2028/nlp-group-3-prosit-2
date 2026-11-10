@@ -453,6 +453,8 @@ async def run_api(request: Request):
             s.server = await serve(s.state.workspace, APP_PREFIX)
         except RuntimeError as e:
             raise HTTPException(500, str(e))
+        if s.state.result:   # the API is reached through the gateway, never a localhost port
+            s.state.result.base_url, s.state.result.docs_url = APP_PREFIX, APP_PREFIX + "/docs"
     return snapshot(s)
 
 
