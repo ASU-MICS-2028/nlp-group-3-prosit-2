@@ -28,7 +28,7 @@ def run_with(state, *submissions, replies=None):
                 replies.append(answer)
         if replies is not None:
             replies.append(prompt)   # last item: the prompt, so tests can look at it
-        return {"tokens": 100}
+        return {"tokens": 100, "cost_usd": 0.02}
     return asyncio.run(A.run(state, emit, runner=fake_runner))
 
 
@@ -41,6 +41,7 @@ def test_good_spec_is_saved_and_needs_approval():
     assert st.spec == Spec(**GOLDEN_SPEC)
     assert st.spec_approved is False                 # the user must approve it again
     assert st.logs[-1].agent == "architect" and st.logs[-1].tokens == 100
+    assert st.logs[-1].cost_usd == 0.02                       # cost of every step is logged
 
 
 def test_bad_spec_is_sent_back_then_fixed():

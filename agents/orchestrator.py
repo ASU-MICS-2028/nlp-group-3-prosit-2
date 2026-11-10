@@ -9,7 +9,7 @@ It is plain Python, NOT an AI. These rules must hold every time, so no model get
 The three jobs, in order:
   chat()    user message -> Requirements agent; once the summary is confirmed -> design()
   design()  Architect makes (or changes) the spec. Then we wait for the user to approve it.
-  build()   Coder -> Tester -> fix rounds -> result
+  build()   split the spec into tasks -> Coder -> Tester -> fix rounds -> result
 
 Every agent has the same shape (shared contract): async def run(state, emit) -> state
 """
@@ -20,6 +20,7 @@ from pathlib import Path
 
 from agents import architect, requirements
 from core.events import Emit, Event
+from core.spec import Spec
 from core.state import BuildResult, LogEntry, ProjectState
 from server import stubs
 
@@ -78,6 +79,10 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
     state.failures, state.result = [], None
     await step(state, emit, "build", "Build started")
 
+    # Decomposition: split the approved spec into small tasks the Coder works through one by one.
+    state.tasks = plan_tasks(state.spec)
+    await step(state, emit, "plan", f"{len(state.tasks)} build tasks")
+
     # Coder first. Only test code that passed the Coder's own checks.
     state = await AGENTS["coder"](state, emit)
     if state.build_ok:
@@ -98,6 +103,21 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
     await emit(Event(type="result", agent="orchestrator", detail="Build finished",
                      data={"build_ok": state.build_ok, "tests_ok": state.tests_ok}))
     return state
+
+
+def plan_tasks(spec: Spec) -> list[str]:
+    """One task for the setup, one per entity (its table and its endpoints), one for the rules."""
+    tasks = ["Set up the project: app/main.py, the SQLite database, and GET /health."]
+    for entity in spec.entities:
+        fields = ", ".join(f.name for f in entity.fields)
+        endpoints = ", ".join(f"{e.method} {e.path} ({e.access})" for e in spec.endpoints if e.entity == entity.name)
+        tasks.append(f"{entity.name}: table and schemas with {fields}. Endpoints: {endpoints or 'none'}.")
+    others = [f"{e.method} {e.path} ({e.access})" for e in spec.endpoints if e.entity is None]
+    if others:
+        tasks.append("Other endpoints: " + ", ".join(others) + ".")
+    if spec.rules:
+        tasks.append("Business rules: " + " ".join(spec.rules))
+    return tasks
 
 
 async def fix_round(state: ProjectState, emit: Emit) -> ProjectState:

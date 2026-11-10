@@ -20,6 +20,7 @@ class LogEntry(BaseModel):
     action: str
     detail: str = ""
     tokens: int = 0
+    cost_usd: float = 0.0
     seconds: float = 0.0
 
 

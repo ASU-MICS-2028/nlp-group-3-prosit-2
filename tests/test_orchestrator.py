@@ -108,6 +108,21 @@ def test_every_step_is_saved_as_jsonl(tmp_path, monkeypatch):
     assert json.loads(lines[0])["action"] == "build"
 
 
+def test_spec_is_split_into_build_tasks():
+    golden = Spec.model_validate_json((O.Path(__file__).parent.parent / "golden/clinic/spec.json").read_text())
+    tasks = O.plan_tasks(golden)
+    assert len(tasks) == 1 + 3 + 1                            # setup, Patient, Doctor, Appointment, rules
+    assert "GET /health" in tasks[0]
+    assert tasks[3].startswith("Appointment:") and "POST /appointments (user)" in tasks[3]
+    assert tasks[-1].startswith("Business rules:")
+
+
+def test_build_fills_in_the_tasks(tmp_path, monkeypatch):
+    fake_agents(monkeypatch, tests_pass=[True])
+    st = asyncio.run(O.build(approved(tmp_path), emit))
+    assert st.tasks[0].startswith("Set up the project") and "GET /items (user)" in st.tasks[-1]
+
+
 def test_chat_designs_only_after_the_user_confirms(monkeypatch):
     calls = fake_agents(monkeypatch, tests_pass=[])
 

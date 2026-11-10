@@ -137,7 +137,8 @@ async def run(state: ProjectState, emit: Emit, runner=run_agent) -> ProjectState
     state.spec = spec
     state.spec_approved = False     # a new or changed spec always needs the user's approval
     state.change_request = None
-    state.logs.append(LogEntry(agent="architect", action=action, tokens=usage.get("tokens", 0), seconds=seconds,
+    state.logs.append(LogEntry(agent="architect", action=action, seconds=seconds,
+                               tokens=usage.get("tokens", 0), cost_usd=usage.get("cost_usd", 0.0),
                                detail=f"{len(spec.entities)} entities, {len(spec.endpoints)} endpoints"))
     await emit(Event(type="step", agent="architect", detail=state.logs[-1].detail, data={"action": action}))
     await emit(Event(type="spec", agent="architect", detail=spec.project_name))

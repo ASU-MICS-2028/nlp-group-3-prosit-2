@@ -131,6 +131,7 @@ def snapshot(s: Session) -> dict:
         "server": {"url": APP_PREFIX} if s.server else None,
         "model": os.getenv("LLM_MODEL", "stub agents"),
         "tokens": sum(l.tokens for l in s.state.logs),
+        "cost_usd": round(sum(l.cost_usd for l in s.state.logs), 4),
         "published": _published_for(s),
         "publish_url": PUBLISH_URL,
         **_chat_extras(s),
