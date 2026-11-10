@@ -11,6 +11,8 @@ The three jobs, in order:
   design()  Architect makes (or changes) the spec. Then we wait for the user to approve it.
   build()   split the spec into tasks -> Coder -> Tester -> fix rounds -> result
 
+For the evaluation, build_single() lets ONE agent do everything, to compare against the team.
+
 Every agent has the same shape (shared contract): async def run(state, emit) -> state
 """
 import os
@@ -18,7 +20,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from agents import architect, requirements
+from agents import architect, requirements, single
 from core.events import Emit, Event
 from core.spec import Spec
 from core.state import BuildResult, LogEntry, ProjectState
@@ -37,6 +39,7 @@ AGENTS = {
     "architect": stubs.architect if STUB_ARCHITECT else architect.run,
     "coder": stubs.coder,     # placeholder until Role 3's agents/coder.py lands
     "tester": stubs.tester,   # placeholder until Role 4's agents/tester.py lands
+    "single": single.run,     # single-agent mode, for the comparison in the evaluation
 }
 
 
@@ -102,6 +105,19 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
     write_log(state)
     await emit(Event(type="result", agent="orchestrator", detail="Build finished",
                      data={"build_ok": state.build_ok, "tests_ok": state.tests_ok}))
+    return state
+
+
+# ---------- single-agent mode (baseline for the evaluation) ----------
+
+async def build_single(state: ProjectState, emit: Emit) -> ProjectState:
+    """One agent builds everything from the requirements: no spec, no approval, no tester, no fix rounds.
+    Called by the benchmark (Role 4) to compare against the multi-agent pipeline, not by the web app."""
+    if state.requirements is None:
+        raise RuntimeError("Confirm the requirements before building.")
+    await step(state, emit, "build_single", "Single-agent build started")
+    state = await AGENTS["single"](state, emit)
+    write_log(state)
     return state
 
 

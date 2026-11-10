@@ -256,6 +256,7 @@ These are what let four people build separately and still fit together. **Changi
 │   ├── requirements.py      # Role 1
 │   ├── architect.py         # Role 2
 │   ├── orchestrator.py      # Role 2
+│   ├── single.py            # Role 2: single-agent mode, the baseline for the evaluation
 │   ├── coder.py             # Role 3
 │   └── tester.py            # Role 4
 ├── core/
@@ -396,18 +397,18 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 ### Role 2: Orchestrator & Architect
 
 **Set up**
-- [ ] Lead `ProjectState`, agent format and event format
+- [x] Lead `ProjectState`, agent format and event format (`Failure` and `BuildResult` added)
 - [x] Write the golden spec
 
 **Build**
-- [ ] `core/sdk.py`: shared options builder, model and turn limits, logging hook (agent, tool, tokens, cost, time)
-- [ ] Orchestrator: requirements → architect → approval → coder ⇄ tester → serve
-- [ ] Stop rules: max fix rounds, restore last working code
-- [ ] Architect agent on the SDK with `submit_spec` validating against the schema
-- [ ] Split the spec into build tasks for the Coder
-- [ ] Route change requests (from the approval screen and mid-build messages) back to the Architect
-- [ ] Single-agent mode (one SDK session does everything) for comparison
-- [ ] Write every step to a JSONL log
+- [x] `core/sdk.py`: shared `run_agent()` with model, turn and cost limits; file tools locked to the project by a `PreToolUse` hook. Tokens, cost and time are logged per step
+- [x] Orchestrator: requirements → architect → approval → coder ⇄ tester (`agents/orchestrator.py`; serving stays in the gateway)
+- [x] Stop rules: max fix rounds, restore last working code
+- [x] Architect agent on the SDK with `submit_spec` validating against the schema (`agents/architect.py`)
+- [x] Split the spec into build tasks for the Coder (`plan_tasks()`)
+- [ ] Route change requests (from the approval screen and mid-build messages) back to the Architect: approval screen done; mid-build messages not yet
+- [x] Single-agent mode (one SDK session does everything) for comparison (`agents/single.py`, `orchestrator.build_single()`)
+- [x] Write every step to a JSONL log (`<project>/steps.jsonl`)
 
 **Connect**
 - [ ] Wire all agents (with Roles 1 and 3)
