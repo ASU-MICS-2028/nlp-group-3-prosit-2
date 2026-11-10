@@ -177,3 +177,32 @@ def test_requirements_agent_through_the_gateway(client, monkeypatch):
     s = wait_idle(client)
     assert s["phase"] == "review" and s["state"]["requirements"]["project_name"] == golden["project_name"]
     assert client.post("/api/requirements/confirm").status_code == 409   # nothing pending any more
+
+
+def test_messages_sent_while_busy_are_queued(client, monkeypatch):
+    """A message sent during a job is shown as waiting, then sent when the job ends (not refused)."""
+    import asyncio
+    import server.app as gw
+    from core.state import Message
+
+    async def slow(state, emit):
+        await asyncio.sleep(0.3)
+        state.chat.append(Message(role="assistant", content=f"Got {len(state.chat)}"))
+        return state
+    monkeypatch.setattr(gw, "requirements", slow)
+
+    client.post("/api/chat", json={"text": "I run a bakery"})
+    s = client.post("/api/chat", json={"text": "We also deliver"}).json()
+    assert s["busy"] and s["queued"] == ["We also deliver"]
+    s = wait_idle(client)
+    assert s["queued"] == []
+    assert [m["content"] for m in s["state"]["chat"] if m["role"] == "user"] == ["I run a bakery", "We also deliver"]
+    assert s["state"]["chat"][-1]["role"] == "assistant"
+
+
+def test_mentioned_files_reach_the_change_request(client):
+    build_golden(client)
+    client.post("/api/chat", json={"text": "In @app/main.py, @nope.py and me@mail.com: add reviews @app/main.py."})
+    s = wait_idle(client)
+    assert s["state"]["change_files"] == ["app/main.py"]   # only real files, once each
+    assert "add reviews" in s["revisions"][-1]

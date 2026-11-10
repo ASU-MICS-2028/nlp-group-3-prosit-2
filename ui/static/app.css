@@ -291,6 +291,13 @@ a { color: var(--accent-ink); }
 .composer textarea::placeholder { color: var(--muted); }
 .composer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
 .composer-row .icon-btn i { color: var(--muted); }
+.composer { position: relative; }
+.menu.mention-menu { position: absolute; top: auto; bottom: calc(100% + 6px); left: 8px; right: 8px; max-height: min(300px, 45vh); overflow: auto; }
+.mention-menu button { font-family: var(--mono); font-size: 13px; }
+.mention-menu button.on { background: var(--accent-soft); color: var(--accent-ink); }
+.mention { font-weight: 600; background: rgba(255,255,255,.2); border-radius: 5px; padding: 0 4px; }
+.msg.user.queued { opacity: .6; }
+.queued-note { align-self: flex-end; font-size: 12px; color: var(--muted); margin-top: -6px; }
 .send { width: 42px; height: 42px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; transition: background .12s, transform .12s; }
 .send i { width: 20px; height: 20px; }
 .send:hover { background: var(--accent-ink); transform: scale(1.04); }

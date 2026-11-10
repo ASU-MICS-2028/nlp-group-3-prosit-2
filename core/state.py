@@ -28,7 +28,8 @@ class ProjectState(BaseModel):
     requirements: Optional[Requirements] = None
     spec: Optional[Spec] = None
     spec_approved: bool = False
-    change_request: Optional[str] = None   # set by the approval screen
+    change_request: Optional[str] = None   # what the user wants changed, in their words (set by the gateway)
+    change_files: list[str] = []           # workspace files the user @mentioned in that request, e.g. "app/main.py"
     tasks: list[str] = []                  # build tasks for the coder
     workspace: Optional[str] = None        # folder holding the generated API (app/main.py)
     build_ok: bool = False                 # coder's sandbox checks passed
