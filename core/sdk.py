@@ -19,19 +19,21 @@ FILE_TOOLS = ["Read", "Write", "Edit"]
 WRITABLE = ("app", "tests")   # the only folders an agent may write in, inside its project
 
 
-def allowed(tool: str, path: str, workspace: str) -> bool:
-    """Security rule for file tools: read only inside the project, write only in app/ or tests/."""
+def allowed(tool: str, path: str, workspace: str, writable: tuple = WRITABLE) -> bool:
+    """Security rule for file tools: read only inside the project, write only in the writable folders
+    (app/ and tests/ by default; the Tester gets tests/ only)."""
     ws = Path(workspace).resolve()
     target = (ws / path).resolve()   # an absolute path stays absolute; ".." and symlinks are resolved
     if tool == "Read":
         return target == ws or ws in target.parents
-    return any(target.is_relative_to(ws / folder) and target != ws / folder for folder in WRITABLE)
+    return any(target.is_relative_to(ws / folder) and target != ws / folder for folder in writable)
 
 
 async def run_agent(system: str, prompt: str, tools: dict, max_turns: int = 6, max_usd: float = 0.25,
-                    workspace: str | None = None) -> dict:
+                    workspace: str | None = None, writable: tuple = WRITABLE) -> dict:
     """Run the agent until it stops. Returns {"tokens": ..., "cost_usd": ...}.
-    With a workspace, the agent may also Read, Write and Edit files there (see allowed())."""
+    With a workspace, the agent may also Read, Write and Edit files there (see allowed()).
+    `writable` narrows the folders it may write in, e.g. ("tests",) for the Tester."""
     from claude_agent_sdk import (ClaudeAgentOptions, ClaudeSDKClient, HookMatcher, ResultMessage,
                                   create_sdk_mcp_server, tool)
 
@@ -55,11 +57,12 @@ async def run_agent(system: str, prompt: str, tools: dict, max_turns: int = 6, m
     if workspace:
         async def guard(input_data, tool_use_id, context):
             path = input_data["tool_input"].get("file_path", "")
-            if allowed(input_data["tool_name"], path, workspace):
+            if allowed(input_data["tool_name"], path, workspace, writable):
                 return {}   # no objection
             return {"hookSpecificOutput": {
                 "hookEventName": "PreToolUse", "permissionDecision": "deny",
-                "permissionDecisionReason": f"Not allowed: {path}. Read inside the project; write only in app/ or tests/."}}
+                "permissionDecisionReason": f"Not allowed: {path}. Read inside the project; write only in "
+                                            + " or ".join(f"{folder}/" for folder in writable) + "."}}
 
         builtin = FILE_TOOLS
         allowed_tools += FILE_TOOLS
