@@ -780,8 +780,8 @@ function renderChat() {
   }
   // the timeline: each change request comes after the version it replaced (kept, collapsed)
   const rounds = S.rounds || [];
+  for (const r of S.revisions.slice(0, S.revisions.length - rounds.length)) html += `<div class="msg user">${userText(r)}</div>`;   // asked before rounds were kept
   rounds.forEach((r, i) => { if (r.spec) html += pastRound(r, i); html += `<div class="msg user">${userText(r.request)}</div>`; });
-  if (!rounds.length) for (const r of S.revisions) html += `<div class="msg user">${userText(r)}</div>`;   // older projects
   // while a change is running, don't show the old version a second time: only what is new
   const last = S.busy && rounds[rounds.length - 1];
   const newSpec = !last || JSON.stringify(st.spec) !== JSON.stringify(last.spec);
