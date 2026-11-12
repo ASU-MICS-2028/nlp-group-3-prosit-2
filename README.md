@@ -117,7 +117,18 @@ flowchart LR
 6. **Fix.** The failure report sends the Coder back into its loop (`MAX_FIX_ROUNDS`, default 1). The Coder cannot edit `tests/`. If a fix round breaks the build, the last working code is restored and the known failures are reported honestly.
 7. **Deliver.** The orchestrator starts the API in the serve sandbox and returns a `BuildResult`: base URL, docs URL, endpoint list, test summary and any known failures.
 
-Messages the user sends during a build are queued and shown in the chat. After the current agent step, the orchestrator routes them as change requests.
+Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). Today the gateway sends them, joined into one message, when the running job ends: before a spec they go to the Requirements agent, after it they are a change request. Routing them sooner, after the current agent step, is Role 2's.
+
+### Change requests and `@` mentions
+
+After the spec exists, everything the user types is a **change request**. The user can point at a file by typing `@` in the chat box and picking it from the list, e.g. *"In @app/main.py, let patients reschedule"*. The gateway fills two fields:
+
+| Field | Set by | Holds |
+| --- | --- | --- |
+| `state.change_request` | gateway | The user's words, unchanged (mentions included) |
+| `state.change_files` | gateway | The `@`-mentioned paths that really exist in the workspace, in order, no duplicates (e.g. `["app/main.py"]`). Unknown names and email addresses are ignored. |
+
+The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). A new change request overwrites both fields.
 
 ### Inside each agent
 
@@ -234,7 +245,7 @@ These are what let four people build separately and still fit together. **Changi
 
 | Contract | Where | What it fixes |
 | --- | --- | --- |
-| `ProjectState` | `core/state.py` | The single object passed between agents: chat, requirements, spec, approval flag, change request, tasks, workspace, build/test status, logs |
+| `ProjectState` | `core/state.py` | The single object passed between agents: chat, requirements, spec, approval flag, change request and the files it mentions (`change_files`), tasks, workspace, build/test status, logs |
 | `Requirements`, `Spec` | `core/spec.py` | Data, endpoints, access rules and business rules |
 | Agent format | every `agents/*.py` | `async def run(state: ProjectState, emit: Emit) -> ProjectState`. Each agent appends at least one `LogEntry`. |
 | Event format | `core/events.py` | `{"type": "status" \| "step" \| "spec" \| "test" \| "result" \| "error", "agent": str, "detail": str, "data": {}}`, streamed to the UI |
@@ -380,7 +391,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Files, Map, Search and Home (editor) views on the generated workspace
 - [x] Phone layout: one screen at a time, floating tab bar (Chat, Try it, Tests, Code, More), bottom sheets, works down to iPhone SE
 - [x] Installable app (PWA): manifest with maskable icons, service worker, offline page, Install button (Chrome/Edge/Android) and Add to Home Screen steps (iPhone/iPad)
-- [ ] Queue and display messages sent during a build
+- [x] Queue and display messages sent during a build (sent when the running job ends)
+- [x] `@` mentions: pick a workspace file in the chat box; the gateway puts it in `state.change_files`
 - [x] Publish: the user picks a subdomain and gets a permanent URL for the built API (gateway routes by host)
 - [x] Deploy to the server with a domain (Coolify, mesorablocks.online, HTTPS per published subdomain)
 - [ ] Publish hardening: public traffic through the serve sandbox, real sign-in, per-user limits
@@ -434,6 +446,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
 - [ ] Custom tools: `run_checks`, `finish_build` (finish gate)
 - [ ] Check the generated OpenAPI matches the spec
+- [ ] Change requests: when `state.change_request` is set, change only what it asks for and keep the rest of the working code. Open the files in `state.change_files` first: the user pointed at them. See [Change requests and `@` mentions](#change-requests-and--mentions).
 - [ ] Stretch: MCP server exposing the finished API's spec
 - [ ] Document security risks and mitigations
 

@@ -51,6 +51,7 @@ function hydrateIcons(root = document) {
 
 // ---------- helpers ----------
 const $ = s => document.querySelector(s);
+const userText = s => esc(s).replace(/(^|\s)@([\w./-]+)/g, '$1<span class="mention">@$2</span>');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function api(path, opts = {}) {
@@ -760,7 +761,7 @@ function coderSteps() {
 
 function renderChat() {
   const st = S.state;
-  const key = JSON.stringify([st.chat.length, st.spec, st.spec_approved, st.build_ok, st.logs.length, S.busy, S.error, S.revisions, S.server]);
+  const key = JSON.stringify([st.chat.length, st.spec, st.spec_approved, st.build_ok, st.logs.length, S.busy, S.error, S.revisions, S.queued, S.server]);
   const el = $('#messages');
   if (key === lastChatKey) { updateElapsed(); return; }
   lastChatKey = key;
@@ -775,12 +776,13 @@ function renderChat() {
   let html = '', prevRole = null;
   for (const m of st.chat) {
     if (m.role === 'assistant' && prevRole !== 'assistant') html += `<div class="who">${icon('logo')}Assistant</div>`;
-    html += `<div class="msg ${m.role}">${m.role === 'assistant' ? md(m.content) : esc(m.content)}</div>`;
+    html += `<div class="msg ${m.role}">${m.role === 'assistant' ? md(m.content) : userText(m.content)}</div>`;
     prevRole = m.role;
   }
-  for (const r of S.revisions) html += `<div class="msg user">${esc(r)}</div>`;
+  for (const r of S.revisions) html += `<div class="msg user">${userText(r)}</div>`;
   if (st.spec) html += specCard();
   if (st.spec_approved) html += buildCard();
+  for (const q of S.queued || []) html += `<div class="msg user queued">${userText(q)}</div><div class="queued-note">I'll read this when I'm done</div>`;
   if (S.busy && !(st.spec_approved && S.busy.startsWith('Building'))) {
     html += `<div class="typing"><div class="dots"><span></span><span></span><span></span></div>${esc(S.busy)} <span class="elapsed"></span></div>`;
   }
@@ -866,23 +868,71 @@ function renderComposer() {
   const phase = S.phase, busy = !!S.busy;
   const input = $('#input');
   const short = MOBILE.matches;   // one line on a phone
-  input.placeholder = busy ? 'Working on it...' : phase === 'chat' ? (short ? 'Describe your app...' : 'Ask a question or describe what you want...')
+  input.placeholder = busy ? (short ? 'Add a message...' : "Add a message, I'll read it when I'm done...") : phase === 'chat' ? (short ? 'Describe your app...' : 'Ask a question or describe what you want...')
     : phase === 'review' ? (short ? 'Ask for a change...' : 'Describe a change to the design, or approve it above...')
     : (short ? 'Ask for a change...' : 'Describe a new feature or change...');
-  input.disabled = busy;
-  $('#send').disabled = busy;
 }
 
 async function send(text) {
   text = text.trim();
-  if (!text || S?.busy) return;
-  $('#input').value = ''; autoGrow();
+  if (!text) return;
+  $('#input').value = ''; autoGrow(); mention.close();
+  if (S?.busy) {   // queued: the gateway sends it when the running job ends
+    (S.queued ||= []).push(text); lastChatKey = ''; render();
+    try { S = await api('/api/chat', { body: { text } }); render(); } catch (e) { toast(e.message); }
+    return;
+  }
   // optimistic bubble
   if (S.phase === 'chat') S.state.chat.push({ role: 'user', content: text });
   else S.revisions.push(text);
   S.busy = 'Thinking...'; busySince = Date.now(); lastChatKey = ''; render();
   await act('/api/chat', { text });
 }
+
+// ---------- @mentions: point at a file when asking for a change ----------
+const mention = {
+  files: [], key: null, loading: null, items: [], i: 0,
+  load() {   // the file list changes only when a build finishes; one fetch shared by every keystroke
+    const key = S.state.workspace + ':' + S.state.logs.length;
+    if (key !== this.key) {
+      this.key = key;
+      this.loading = !S.state.workspace ? Promise.resolve([]) : api('/api/files').then(d => d.files, () => []);
+    }
+    return this.loading.then(f => (this.files = f));
+  },
+  query() {   // the "@abc" being typed just before the caret, if any
+    const t = $('#input'), m = t.value.slice(0, t.selectionStart).match(/(?:^|\s)@([\w./-]*)$/);
+    return m ? m[1] : null;
+  },
+  async update() {
+    if (this.query() === null) return this.close();
+    await this.load();
+    const q = this.query();   // read again: more may have been typed while the list loaded
+    if (q === null) return this.close();
+    this.items = this.files.filter(f => f.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+    if (!this.items.length) return this.close();
+    this.i = Math.min(this.i, this.items.length - 1);
+    let el = $('#mention-menu');
+    if (!el) { el = document.createElement('div'); el.id = 'mention-menu'; el.className = 'menu mention-menu'; el.setAttribute('role', 'listbox'); $('#composer').append(el); }
+    el.innerHTML = `<div class="label">Point at a file</div>` + this.items.map((f, i) =>
+      `<button type="button" role="option" data-mention="${esc(f)}" class="${i === this.i ? 'on' : ''}" aria-selected="${i === this.i}">${icon('code', 'plain')}${esc(f)}</button>`).join('');
+  },
+  pick(f) {
+    const t = $('#input'), caret = t.selectionStart, before = t.value.slice(0, caret).replace(/@[\w./-]*$/, '@' + f + ' ');
+    t.value = before + t.value.slice(caret);
+    t.focus(); t.setSelectionRange(before.length, before.length);
+    this.close(); autoGrow();
+  },
+  close() { $('#mention-menu')?.remove(); this.items = []; this.i = 0; },
+  key_(e) {   // arrows / Enter / Tab / Escape while the list is open; true = handled
+    if (!this.items.length) return false;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { this.i = (this.i + (e.key === 'ArrowDown' ? 1 : this.items.length - 1)) % this.items.length; this.update(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') this.pick(this.items[this.i]);
+    else if (e.key === 'Escape') this.close();
+    else return false;
+    e.preventDefault(); return true;
+  },
+};
 
 function autoGrow() {
   const t = $('#input'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 180) + 'px';
@@ -1050,10 +1100,19 @@ document.addEventListener('input', e => {
 
 $('#composer').addEventListener('submit', e => { e.preventDefault(); send($('#input').value); });
 $('#input').addEventListener('keydown', e => {
+  if (mention.key_(e)) return;
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($('#input').value); }
 });
-$('#input').addEventListener('input', autoGrow);
+$('#input').addEventListener('input', () => { autoGrow(); mention.update(); });
+$('#composer').addEventListener('pointerdown', e => {   // pick before the textarea loses focus
+  const b = e.target.closest('[data-mention]');
+  if (b) { e.preventDefault(); mention.pick(b.dataset.mention); }
+});
+$('#input').addEventListener('blur', () => setTimeout(() => mention.close(), 100));
 $('#send').addEventListener('pointerdown', e => e.preventDefault());   // keep the keyboard up while sending
+$('#messages').addEventListener('pointerdown', e => {   // phone: blurring the composer moves the layout, so a tap
+  if (e.target.closest('button') && document.activeElement === $('#input')) e.preventDefault();   // on Approve etc. would miss
+});
 $('#attach').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;

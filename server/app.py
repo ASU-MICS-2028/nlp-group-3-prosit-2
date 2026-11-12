@@ -62,6 +62,7 @@ class Session:
         self.root = WORKSPACES / sid
         self.state = ProjectState()
         self.revisions: list[str] = []      # change requests after the first spec
+        self.queued: list[str] = []         # messages sent while a job was running; sent when it ends
         self.busy: Optional[str] = None     # label of the running job
         self.error: Optional[str] = None
         self.user_name = "You"
@@ -125,6 +126,7 @@ def snapshot(s: Session) -> dict:
     return {
         "state": s.state.model_dump(mode="json"),
         "revisions": s.revisions,
+        "queued": s.queued,
         "phase": _phase(s),
         "busy": s.busy,
         "error": s.error,
@@ -164,6 +166,7 @@ def _job(s: Session, label: str, fn) -> dict:
             _save(s)
             s.busy = None
             await s.emit(Event(type="status", detail="idle"))
+            _send_queued(s)
 
     s.task = asyncio.create_task(work())
     return snapshot(s)
@@ -270,20 +273,49 @@ async def _build(s: Session) -> None:
     s.state = await orchestrator.build(s.state, s.emit)
 
 
-@app.post("/api/chat")
-async def chat(body: Text, request: Request):
-    """Composer message. Before a spec it goes to the requirements agent; after, it's a change request."""
-    s, text = sess(request), body.text.strip()
-    if not text:
-        raise HTTPException(422, "Empty message")
+MENTION_RE = re.compile(r"(?:^|\s)@([\w./-]+)")
+
+
+def mentions(s: Session, text: str) -> list[str]:
+    """Workspace files the user @mentioned, e.g. "@app/main.py". Anything else is left as plain text."""
+    known = {str(p.relative_to(_project_dir(s))) for p in _files(s)}
+    return list(dict.fromkeys(m.rstrip(".,") for m in MENTION_RE.findall(text) if m.rstrip(".,") in known))
+
+
+def _send_queued(s: Session) -> None:
+    """A job ended: send what the user typed meanwhile, as one message."""
+    if not s.queued:
+        return
+    text, s.queued = "\n\n".join(s.queued), []
+    if s.error:   # don't run on top of a failure; hand the words back instead of losing them
+        s.error += f"\n\nNot sent (please send again): {text}"
+        return
+    _dispatch(s, text)
+
+
+def _dispatch(s: Session, text: str) -> dict:
+    """Before a spec, a message goes to the requirements agent; after, it's a change request."""
     if s.state.spec:
-        return await change(body, request)
+        return _change(s, text)
 
     async def work():
         s.state.chat.append(Message(role="user", content=text))
         s.state = await orchestrator.chat(s.state, s.emit)
 
     return _job(s, "Thinking...", work)
+
+
+@app.post("/api/chat")
+async def chat(body: Text, request: Request):
+    """Composer message. While a job runs it is queued (shown in the chat) and sent when the job ends."""
+    s, text = sess(request), body.text.strip()
+    if not text:
+        raise HTTPException(422, "Empty message")
+    if s.busy:
+        s.queued.append(text)
+        await s.emit(Event(type="status", detail=s.busy))
+        return snapshot(s)
+    return _dispatch(s, text)
 
 
 @app.post("/api/requirements/confirm")
@@ -306,10 +338,14 @@ async def change(body: Text, request: Request):
     s, text = sess(request), body.text.strip()
     if not s.state.spec:
         raise HTTPException(409, "No spec yet")
+    return _change(s, text)
 
+
+def _change(s: Session, text: str) -> dict:
+    """Change request. @mentioned files go to state.change_files for the Architect and Coder."""
     async def work():
         s.revisions.append(text)
-        s.state.change_request = text
+        s.state.change_request, s.state.change_files = text, mentions(s, text)
         await _design(s)
 
     return _job(s, "Updating the design...", work)
@@ -366,7 +402,7 @@ def open_project(body: Slug, request: Request):
         raise HTTPException(409, f"Busy: {s.busy}")
     _stop_server(s)
     data = json.loads(f.read_text())
-    s.state, s.revisions, s.error = ProjectState.model_validate(data["state"]), data.get("revisions", []), None
+    s.state, s.revisions, s.error, s.queued = ProjectState.model_validate(data["state"]), data.get("revisions", []), None, []
     return snapshot(s)
 
 
@@ -376,7 +412,7 @@ def new_project(request: Request):
     if s.busy:
         raise HTTPException(409, f"Busy: {s.busy}")
     _stop_server(s)
-    s.state, s.revisions, s.error = ProjectState(), [], None
+    s.state, s.revisions, s.error, s.queued = ProjectState(), [], None, []
     return snapshot(s)
 
 
