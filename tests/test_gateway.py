@@ -245,3 +245,20 @@ def test_project_comes_back_after_a_restart(client):
     client.post("/api/chat", json={"text": "Let patients reschedule"})
     s = wait_idle(client)
     assert s["revisions"] == ["Let patients reschedule"] and len(client.get("/api/projects").json()["projects"]) == 1
+
+
+def test_changes_keep_earlier_versions_in_order(client):
+    """The chat is a timeline: version 1 (design + build), the change request, then version 2."""
+    import server.app as gw
+    built = build_golden(client)
+    client.post("/api/chat", json={"text": "Add a waiting list"})
+    s = wait_idle(client)
+    [r] = s["rounds"]
+    assert r["request"] == "Add a waiting list" and r["spec"]["project_name"] == built["state"]["spec"]["project_name"]
+    assert r["build"]["tests_ok"] and r["build"]["test_summary"] == built["state"]["test_summary"]
+    assert r["log_end"] == len(built["state"]["logs"])                # its build steps are logs[:log_end]
+    client.post("/api/chat", json={"text": "And reminders"}); wait_idle(client)
+    gw.SESSIONS.clear()                                             # survives a restart
+    rounds = client.get("/api/state").json()["rounds"]
+    assert [r["request"] for r in rounds] == ["Add a waiting list", "And reminders"]
+    assert rounds[1]["build"] is None                                # version 2 was never approved and built

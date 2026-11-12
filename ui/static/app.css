@@ -258,6 +258,15 @@ a { color: var(--accent-ink); }
 .acard { align-self: stretch; border: 1px solid var(--line-strong); border-radius: 14px; overflow: hidden; animation: in .18s ease-out; background: var(--bg); }
 .acard-head { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 14.5px; }
 .acard-head i { width: 18px; height: 18px; color: var(--accent); }
+.past { align-self: stretch; border: 1px dashed var(--line-strong); border-radius: 14px; background: var(--side); }
+.past > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; font-size: 14px; }
+.past > summary::-webkit-details-marker { display: none; }
+.past > summary b { white-space: nowrap; }
+.past > summary span { color: var(--muted); font-size: 12.5px; margin-left: auto; text-align: right; }
+.past > summary i { width: 16px; height: 16px; color: var(--muted); flex: none; transition: transform .15s; }
+.past[open] > summary i:last-child { transform: rotate(180deg); }
+.past[open] { display: flex; flex-direction: column; gap: 10px; padding-bottom: 10px; }
+.past[open] > .acard { margin: 0 10px; width: auto; }
 .acard-head .pill { margin-left: auto; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--hover); color: var(--muted); }
 .pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.bad { background: var(--bad-soft); color: var(--bad); } .pill.run { background: var(--accent-soft); color: var(--accent-ink); }
 .acard-body { padding: 14px 16px; font-size: 14px; }

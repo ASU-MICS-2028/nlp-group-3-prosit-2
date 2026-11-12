@@ -149,7 +149,7 @@ After the spec exists, everything the user types is a **change request**. The us
 | `state.change_request` | gateway | The user's words, unchanged (mentions included) |
 | `state.change_files` | gateway | The `@`-mentioned paths that really exist in the workspace, in order, no duplicates (e.g. `["app/main.py"]`). Unknown names and email addresses are ignored. |
 
-The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). A new change request overwrites both fields.
+The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). A new change request overwrites both fields. In the chat, each request appears right after the version it replaced. Earlier versions stay in place, collapsed, with their design and build (the gateway keeps them as `rounds`).
 
 ### Inside each agent
 
