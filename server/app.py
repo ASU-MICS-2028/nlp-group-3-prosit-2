@@ -35,13 +35,10 @@ from pydantic import BaseModel
 from core.codemap import code_map
 from core.events import Event
 from core.state import Message, ProjectState
+from agents import orchestrator
 from agents import requirements as req_agent
-# Placeholders until the real agents (agents/*) and serve sandbox (core/sandbox) land.
-from server.stubs import architect, build, serve, stop
-from server import stubs
-
-# REQUIREMENTS_AGENT=stub replays the golden chat (offline, no model calls)
-requirements = stubs.requirements if os.getenv("REQUIREMENTS_AGENT") == "stub" else req_agent.run
+# Placeholder until the serve sandbox (core/sandbox) lands. Which agents run is set in agents/orchestrator.py.
+from server.stubs import serve, stop
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "ui" / "static"
@@ -74,6 +71,8 @@ class Session:
         self.listeners: set[asyncio.Queue] = set()
 
     async def emit(self, ev: Event) -> None:
+        if ev.type == "status" and self.busy:   # e.g. the orchestrator says "Designing your API..."
+            self.busy = ev.detail
         for q in self.listeners:
             q.put_nowait(ev.model_dump())
 
@@ -134,6 +133,7 @@ def snapshot(s: Session) -> dict:
         "server": {"url": APP_PREFIX} if s.server else None,
         "model": os.getenv("LLM_MODEL", "stub agents"),
         "tokens": sum(l.tokens for l in s.state.logs),
+        "cost_usd": round(sum(l.cost_usd for l in s.state.logs), 4),
         "published": _published_for(s),
         "publish_url": PUBLISH_URL,
         **_chat_extras(s),
@@ -262,19 +262,15 @@ class Text(BaseModel):
 
 
 async def _design(s: Session) -> None:
-    s.busy = "Designing your API..."
-    await s.emit(Event(type="status", detail=s.busy))
-    s.state = await architect(s.state, s.emit)
+    s.state = await orchestrator.design(s.state, s.emit)
 
 
 async def _build(s: Session) -> None:
-    s.busy = "Building your API..."
-    await s.emit(Event(type="status", detail=s.busy))
     _stop_server(s)
     d = _project_dir(s)
     d.mkdir(parents=True, exist_ok=True)
     s.state.workspace = str(d)
-    s.state = await build(s.state, s.emit)
+    s.state = await orchestrator.build(s.state, s.emit)
 
 
 MENTION_RE = re.compile(r"(?:^|\s)@([\w./-]+)")
@@ -304,9 +300,7 @@ def _dispatch(s: Session, text: str) -> dict:
 
     async def work():
         s.state.chat.append(Message(role="user", content=text))
-        s.state = await requirements(s.state, s.emit)
-        if s.state.requirements is not None:
-            await _design(s)
+        s.state = await orchestrator.chat(s.state, s.emit)
 
     return _job(s, "Thinking...", work)
 
@@ -496,6 +490,8 @@ async def run_api(request: Request):
             s.server = await serve(s.state.workspace, APP_PREFIX)
         except RuntimeError as e:
             raise HTTPException(500, str(e))
+        if s.state.result:   # the API is reached through the gateway, never a localhost port
+            s.state.result.base_url, s.state.result.docs_url = APP_PREFIX, APP_PREFIX + "/docs"
     return snapshot(s)
 
 

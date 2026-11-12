@@ -150,9 +150,9 @@ async def run(state: ProjectState, emit: Emit, runner: Optional[Runner] = None) 
         usage = await (runner or sdk_runner)(SYSTEM, _transcript(state), tools, SCHEMAS)
     except Exception as e:   # provider down, no credentials...: tell the person, keep the chat
         usage, decided = {}, decided or {"action": "error", "error": f"{type(e).__name__}: {str(e)[:200]}"}
-    seconds, tokens = round(time.time() - t0, 2), usage.get("tokens", 0)
+    seconds, tokens, cost = round(time.time() - t0, 2), usage.get("tokens", 0), usage.get("cost_usd", 0.0)
     log = lambda action, detail: state.logs.append(
-        LogEntry(agent="requirements", action=action, detail=detail, tokens=tokens, seconds=seconds))
+        LogEntry(agent="requirements", action=action, detail=detail, tokens=tokens, cost_usd=cost, seconds=seconds))
 
     action = decided.get("action")
     if action == "ask":
