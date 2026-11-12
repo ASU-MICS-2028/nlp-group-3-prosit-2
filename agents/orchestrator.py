@@ -127,8 +127,9 @@ def plan_tasks(spec: Spec) -> list[str]:
     tasks = ["Set up the project: app/main.py, the SQLite database, and GET /health."]
     for entity in spec.entities:
         fields = ", ".join(f.name for f in entity.fields)
+        rel = f" Belongs to: {', '.join(entity.belongs_to)}." if entity.belongs_to else ""
         endpoints = ", ".join(f"{e.method} {e.path} ({e.access})" for e in spec.endpoints if e.entity == entity.name)
-        tasks.append(f"{entity.name}: table and schemas with {fields}. Endpoints: {endpoints or 'none'}.")
+        tasks.append(f"{entity.name}: table and schemas with {fields}.{rel} Endpoints: {endpoints or 'none'}.")
     others = [f"{e.method} {e.path} ({e.access})" for e in spec.endpoints if e.entity is None]
     if others:
         tasks.append("Other endpoints: " + ", ".join(others) + ".")
