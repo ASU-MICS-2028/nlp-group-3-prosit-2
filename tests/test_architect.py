@@ -73,9 +73,39 @@ def test_checks_find_broken_links():
 
 
 def test_change_request_shows_the_old_spec_and_the_change():
-    st = ProjectState(requirements=GOLDEN_REQ, spec=Spec(**GOLDEN_SPEC), change_request="Add a notes field to Patient")
+    st = ProjectState(requirements=GOLDEN_REQ, spec=Spec(**GOLDEN_SPEC),
+                      change_request="Add a notes field to Patient",
+                      change_files=["app/main.py", "app/schemas/patient.py"])
     replies = []
     st = run_with(st, GOLDEN_SPEC, replies=replies)
     prompt = replies[-1]
     assert "<spec>" in prompt and "Add a notes field to Patient" in prompt
+    assert "app/main.py" in prompt and "app/schemas/patient.py" in prompt
     assert st.change_request is None and st.logs[-1].action == "change"
+
+
+def test_checks_reject_explicit_id_field():
+    spec = Spec(project_name="Blog", description="", entities=[
+        {"name": "Post", "fields": [{"name": "id", "type": "int"}, {"name": "title", "type": "str"}]}],
+        endpoints=[{"method": "GET", "path": "/posts", "summary": "List", "entity": "Post"}])
+    problems = A.check_spec(spec)
+    assert any("do not list an 'id' field" in p for p in problems)
+
+
+def test_checks_reject_non_int_foreign_key():
+    spec = Spec(project_name="Shop", description="", entities=[
+        {"name": "Customer", "fields": [{"name": "name", "type": "str"}]},
+        {"name": "Order", "belongs_to": ["Customer"],
+         "fields": [{"name": "customer_id", "type": "str"}, {"name": "total", "type": "float"}]}],
+        endpoints=[{"method": "GET", "path": "/orders", "summary": "List", "entity": "Order"}])
+    problems = A.check_spec(spec)
+    assert any("customer_id must have type 'int'" in p for p in problems)
+
+
+def test_checks_reject_get_with_request_body():
+    spec = Spec(project_name="Blog", description="", entities=[
+        {"name": "Post", "fields": [{"name": "title", "type": "str"}]}],
+        endpoints=[{"method": "GET", "path": "/posts", "summary": "List", "entity": "Post",
+                    "request_fields": ["title"]}])
+    problems = A.check_spec(spec)
+    assert any("GET endpoints cannot accept request_fields" in p for p in problems)
