@@ -117,6 +117,27 @@ flowchart LR
 6. **Fix.** The failure report sends the Coder back into its loop (`MAX_FIX_ROUNDS`, default 1). The Coder cannot edit `tests/`. If a fix round breaks the build, the last working code is restored and the known failures are reported honestly.
 7. **Deliver.** The orchestrator starts the API in the serve sandbox and returns a `BuildResult`: base URL, docs URL, endpoint list, test summary and any known failures.
 
+### Single-agent workflow (`PIPELINE=solo`)
+
+The same app can run with **one agent** instead of the team. The chat is unchanged. After **Looks right**, a single agent (`agents/solo.py`) works in one session:
+
+1. It designs the spec and calls `submit_spec`. The spec gets the same checks as the Architect's (`architect.check_spec`) and appears in the chat as it is accepted.
+2. It writes `app/` and `tests/test_api.py`. Its file tools are guarded like the Coder's: it can only write in `app/` and `tests/`.
+3. It calls `run_tests`, which runs the same pytest run and platform contract tests as the Tester's. It fixes failures and repeats, up to 6 runs.
+4. Our code runs the tests one last time. That run is the verdict, not the model's word.
+
+There is **no approval step and no separate tester**. A change request, with its `@` files, or **Rebuild** sends the same agent back to edit the existing project. It clears `change_request` and `change_files` once it has applied them.
+
+| | Team (`PIPELINE=team`) | One agent (`PIPELINE=solo`) |
+| --- | --- | --- |
+| After the chat | Architect → you approve → Coder ⇄ Tester | One agent designs, builds and tests |
+| Who writes the tests | Tester, from the spec, cannot touch `app/` | The same agent that wrote the code |
+| Checks | `check_spec`, contract tests, final pytest run | The same |
+
+`solo` is the default, except with `REQUIREMENTS_AGENT=stub` (the offline replay, used by the hosted site), which stays on the team flow. Henry's `agents/single.py` is a different thing: the bare benchmark baseline, which writes code and tests but can't run them.
+
+A first live run (Haiku) built a library app in 70 s: 3 entities, 14 endpoints, 60 of 60 tests passed, about 150k tokens including the chat.
+
 Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). Today the gateway sends them, joined into one message, when the running job ends: before a spec they go to the Requirements agent, after it they are a change request. Routing them sooner, after the current agent step, is Role 2's.
 
 ### Change requests and `@` mentions
@@ -323,6 +344,7 @@ claude                                                 # once: log in with your 
 LLM_MODEL=claude-haiku-5-5      # cheap for development; use claude-sonnet-5-5 for demos and benchmark runs
 MAX_TURNS=30                    # per agent session
 MAX_FIX_ROUNDS=1
+PIPELINE=solo                   # solo: one agent builds after the chat | team: architect, approval, coder, tester
 SANDBOX=docker                  # docker | local (local is NOT isolated)
 SERVE_PORT_RANGE=8100-8199
 PUBLISH_URL=http://{sub}.localhost:8000   # where published APIs live; hosted: https://{sub}.your-domain

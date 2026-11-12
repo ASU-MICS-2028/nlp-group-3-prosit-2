@@ -20,7 +20,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from agents import architect, requirements, single, tester
+from agents import architect, requirements, single, solo, tester
 from core.events import Emit, Event
 from core.spec import Spec
 from core.state import BuildResult, LogEntry, ProjectState
@@ -41,7 +41,15 @@ AGENTS = {
     "coder": stubs.coder,     # placeholder until Role 3's agents/coder.py lands
     "tester": stubs.tester if STUB_TESTER else tester.run,
     "single": single.run,     # single-agent mode, for the comparison in the evaluation
+    "solo": solo.run,         # single-agent WORKFLOW in the app: one agent designs, codes and tests
 }
+
+
+def solo_mode() -> bool:
+    """PIPELINE=solo (the default here): after the chat, one agent does everything.
+    PIPELINE=team: architect -> approval -> coder <-> tester.
+    The offline replay (REQUIREMENTS_AGENT=stub, e.g. the hosted site) stays on the team flow."""
+    return os.getenv("PIPELINE", "team" if STUB_REQUIREMENTS else "solo") == "solo"
 
 
 async def step(state: ProjectState, emit: Emit, action: str, detail: str = "") -> None:
@@ -55,7 +63,7 @@ async def step(state: ProjectState, emit: Emit, action: str, detail: str = "") -
 async def chat(state: ProjectState, emit: Emit) -> ProjectState:
     """The user sent a message (already added to state.chat)."""
     state = await AGENTS["requirements"](state, emit)
-    if state.requirements is not None:   # the user confirmed the summary, so move on
+    if state.requirements is not None and not solo_mode():   # confirmed: design (solo: the gateway builds)
         state = await design(state, emit)
     return state
 
@@ -101,6 +109,25 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
         state = await fix_round(state, emit)
 
     # The BuildResult: what the user gets. The gateway adds base_url and docs_url when it starts the API.
+    state.result = BuildResult(endpoints=[f"{e.method} {e.path}" for e in state.spec.endpoints],
+                               test_summary=state.test_summary, known_failures=state.failures)
+    write_log(state)
+    await emit(Event(type="result", agent="orchestrator", detail="Build finished",
+                     data={"build_ok": state.build_ok, "tests_ok": state.tests_ok}))
+    return state
+
+
+# ---------- single-agent workflow (PIPELINE=solo) ----------
+
+async def build_solo(state: ProjectState, emit: Emit) -> ProjectState:
+    """One agent designs, writes the code and tests, runs them and fixes, in one session.
+    No approval step. Also used for change requests and rebuilds (it edits the existing project)."""
+    if state.requirements is None:
+        raise RuntimeError("Confirm the requirements before building.")
+    await emit(Event(type="status", agent="orchestrator", detail="Building your API..."))
+    state.result = None
+    await step(state, emit, "build", "Single-agent build started")
+    state = await AGENTS["solo"](state, emit)
     state.result = BuildResult(endpoints=[f"{e.method} {e.path}" for e in state.spec.endpoints],
                                test_summary=state.test_summary, known_failures=state.failures)
     write_log(state)

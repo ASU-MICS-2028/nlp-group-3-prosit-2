@@ -1,6 +1,7 @@
 """Gateway end to end on the stub agents: chat -> spec -> approve -> build -> files -> run -> proxy."""
 import importlib
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -209,3 +210,25 @@ def test_mentioned_files_reach_the_change_request(client):
     s = wait_idle(client)
     assert s["state"]["change_files"] == ["app/main.py"]   # only real files, once each
     assert "add reviews" in s["revisions"][-1]
+
+
+def test_solo_pipeline_builds_right_after_the_chat(client, monkeypatch):
+    """PIPELINE=solo: confirm the requirements -> one agent builds, no approval step; a change rebuilds."""
+    from agents import orchestrator
+    from test_solo import scripted
+    monkeypatch.setenv("PIPELINE", "solo")
+    calls = []
+
+    async def fake_solo(state, emit):
+        from agents import solo
+        return await solo.run(state, emit, runner=scripted(Path(state.workspace), calls))
+    monkeypatch.setitem(orchestrator.AGENTS, "solo", fake_solo)
+
+    client.post("/api/chat", json={"text": "I run a clinic"}); wait_idle(client)
+    client.post("/api/chat", json={"text": "Patients and staff"})   # stub confirms here
+    s = wait_idle(client)
+    assert s["phase"] == "built" and s["state"]["tests_ok"], s["state"]["test_report"]
+    assert not any(l["agent"] == "architect" for l in s["state"]["logs"])
+    client.post("/api/chat", json={"text": "In @app/main.py let patients reschedule"})
+    s = wait_idle(client)
+    assert len(calls) == 2 and "@app/main.py" in calls[1] and s["phase"] == "built"

@@ -267,10 +267,15 @@ async def _design(s: Session) -> None:
 
 async def _build(s: Session) -> None:
     _stop_server(s)
-    d = _project_dir(s)
+    d = _project_dir(s) or s.root / _slug(s.state.requirements.project_name)   # solo: no spec yet
     d.mkdir(parents=True, exist_ok=True)
     s.state.workspace = str(d)
-    s.state = await orchestrator.build(s.state, s.emit)
+    s.state = await (orchestrator.build_solo if orchestrator.solo_mode() else orchestrator.build)(s.state, s.emit)
+
+
+async def _after_requirements(s: Session) -> None:
+    """Requirements confirmed: the team designs (then waits for approval); solo builds straight away."""
+    await (_build(s) if orchestrator.solo_mode() else _design(s))
 
 
 MENTION_RE = re.compile(r"(?:^|\s)@([\w./-]+)")
@@ -295,12 +300,14 @@ def _send_queued(s: Session) -> None:
 
 def _dispatch(s: Session, text: str) -> dict:
     """Before a spec, a message goes to the requirements agent; after, it's a change request."""
-    if s.state.spec:
+    if s.state.spec or (orchestrator.solo_mode() and s.state.requirements):
         return _change(s, text)
 
     async def work():
         s.state.chat.append(Message(role="user", content=text))
         s.state = await orchestrator.chat(s.state, s.emit)
+        if orchestrator.solo_mode() and s.state.requirements is not None:   # typed "looks right"
+            await _build(s)
 
     return _job(s, "Thinking...", work)
 
@@ -328,7 +335,7 @@ async def confirm_requirements(request: Request):
     async def work():
         s.state.chat.append(Message(role="user", content="Looks right."))
         s.state = await req_agent.confirm(s.state, s.emit)
-        await _design(s)
+        await _after_requirements(s)
 
     return _job(s, "Designing your API...", work)
 
@@ -346,9 +353,9 @@ def _change(s: Session, text: str) -> dict:
     async def work():
         s.revisions.append(text)
         s.state.change_request, s.state.change_files = text, mentions(s, text)
-        await _design(s)
+        await (_build(s) if orchestrator.solo_mode() else _design(s))
 
-    return _job(s, "Updating the design...", work)
+    return _job(s, "Updating your API..." if orchestrator.solo_mode() else "Updating the design...", work)
 
 
 @app.post("/api/spec/approve")

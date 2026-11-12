@@ -749,7 +749,7 @@ const CHIPS = [
 const STEP_LABEL = { write_file: 'Wrote code', write_files: 'Wrote the project files', read_file: 'Read code', list_files: 'Looked at files', run_checks: 'Tested in the sandbox',
   finish: 'Wrapped up', invalid: 'Retried a garbled reply', gave_up: 'Stopped', done: 'Done',
   contract: 'Generated contract tests', write_test: 'Wrote tests', read_test: 'Read tests', run_tests: 'Ran the tests',
-  verdict: 'Test result', restored: 'Kept the last working code' };
+  verdict: 'Test result', restored: 'Kept the last working code', design: 'Designed the API' };
 
 function coderSteps() {
   // build logs (coder, tester, orchestrator) since the most recent architect entry
@@ -853,12 +853,12 @@ function buildCard() {
     foot = `<div class="acard-foot"><button class="btn primary" id="rebuild">${icon('refresh')}Try again</button></div>`;
   }
   const running = S.published ? ` It's live at <a href="${esc(S.published.url)}" target="_blank">${esc(S.published.url.replace(/^https?:\/\//, ''))}</a>.` : '';
-  const tests = st.tests_ok ? ' The tester checked it against your design.'
+  const tests = st.tests_ok ? ' It was checked against your design.'
     : st.tests_ok === false ? '' : ' Not tested yet.';
   const summary = st.build_ok && !building
     ? `<p class="desc" style="margin-bottom:10px">Your API is built: ${st.spec.endpoints.length} endpoints.${tests}${running}</p>
       ${st.tests_ok === false ? `<div class="known-issues">${icon('alert')}<div><b>Known problems (${esc(st.test_summary)})</b>
-        <p>The tester found these and the coder couldn't fix them. Ask for a change or try building again.</p>
+        <p>These checks still fail. Ask for a change or try building again.</p>
         <pre>${esc(st.test_report || '')}</pre></div></div>` : ''}` : '';
   return `<div class="acard"><div class="acard-head">${icon('code')}Build ${pill}</div>
     <div class="acard-body">${summary}<div class="steps">${rows}${live}${!rows && !live && !st.build_ok ? '<span class="desc">Waiting to start...</span>' : ''}</div>${strip}</div>${foot}</div>`;
