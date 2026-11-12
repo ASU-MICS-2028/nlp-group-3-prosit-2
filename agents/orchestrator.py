@@ -21,6 +21,7 @@ import tempfile
 from pathlib import Path
 
 from agents import architect, requirements, single, solo, tester
+from core import layout
 from core.events import Emit, Event
 from core.spec import Spec
 from core.state import BuildResult, LogEntry, ProjectState
@@ -111,6 +112,7 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
     # The BuildResult: what the user gets. The gateway adds base_url and docs_url when it starts the API.
     state.result = BuildResult(endpoints=[f"{e.method} {e.path}" for e in state.spec.endpoints],
                                test_summary=state.test_summary, known_failures=state.failures)
+    layout.scaffold(Path(state.workspace), state.spec)   # README, requirements.txt, Dockerfile, spec.json
     write_log(state)
     await emit(Event(type="result", agent="orchestrator", detail="Build finished",
                      data={"build_ok": state.build_ok, "tests_ok": state.tests_ok}))
@@ -130,6 +132,7 @@ async def build_solo(state: ProjectState, emit: Emit) -> ProjectState:
     state = await AGENTS["solo"](state, emit)
     state.result = BuildResult(endpoints=[f"{e.method} {e.path}" for e in state.spec.endpoints],
                                test_summary=state.test_summary, known_failures=state.failures)
+    layout.scaffold(Path(state.workspace), state.spec)
     write_log(state)
     await emit(Event(type="result", agent="orchestrator", detail="Build finished",
                      data={"build_ok": state.build_ok, "tests_ok": state.tests_ok}))

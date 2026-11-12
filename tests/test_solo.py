@@ -39,7 +39,8 @@ def test_one_agent_designs_builds_and_tests(tmp_path):
     assert st.spec and st.spec_approved and st.build_ok
     assert st.tests_ok, st.test_report                       # verdict from our own final run
     assert any(r["file"] == "tests/test_contract.py" for r in st.test_results)
-    assert [l.action for l in st.logs if l.agent == "solo"] == ["design", "run_tests", "verdict"]
+    assert [l.action for l in st.logs if l.agent == "solo"] == ["design", "run_tests", "layout", "verdict"]
+    assert "app/routers/doctor.py is missing" in st.logs[-2].detail   # the golden app is one main.py
     assert "<requirements>" in calls[0] and "<spec>" not in calls[0]
 
 
@@ -59,3 +60,29 @@ def test_no_valid_spec_is_an_error(tmp_path):
     import pytest
     with pytest.raises(RuntimeError, match="valid design"):
         asyncio.run(solo.run(ProjectState(requirements=REQ, workspace=str(tmp_path)), emit, runner=lazy))
+
+
+def test_layout_check_and_scaffold(tmp_path):
+    from core import layout
+    from core.spec import Spec
+    spec = Spec.model_validate(SPEC)
+    app = tmp_path / "app"
+    for f in ["__init__.py", "main.py", "database.py", "dependencies.py", "schemas/__init__.py", "routers/__init__.py"]:
+        (app / f).parent.mkdir(parents=True, exist_ok=True)
+        (app / f).write_text("" if f.endswith("__init__.py") else "x = 1\n")
+    missing = layout.check(tmp_path, spec)
+    assert missing and all("schemas/" in m or "routers/" in m for m in missing)
+    for e in {e.entity for e in spec.endpoints if e.entity}:
+        (app / "schemas" / f"{layout.snake(e)}.py").write_text("x = 1\n")
+        (app / "routers" / f"{layout.snake(e)}.py").write_text("x = 1\n")
+    assert layout.check(tmp_path, spec) == []
+    (app / "routers" / "doctors.py").write_text("router = 1\n")
+    assert "app/routers/doctors.py: name it after its entity" in layout.check(tmp_path, spec)[0]
+    (app / "routers" / "doctors.py").write_text("")       # what the agent does instead of deleting
+    assert layout.tidy(tmp_path) == ["app/routers/doctors.py"] and layout.check(tmp_path, spec) == []
+    (app / "main.py").write_text("@app.post('/x')\ndef x(): ...\n")
+    assert "endpoint handlers" in layout.check(tmp_path, spec)[0]
+
+    layout.scaffold(tmp_path, spec)
+    assert spec.project_name in (tmp_path / "README.md").read_text()
+    assert all((tmp_path / f).exists() for f in ["spec.json", "requirements.txt", "Dockerfile", ".gitignore"])

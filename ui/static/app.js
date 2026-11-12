@@ -749,7 +749,7 @@ const CHIPS = [
 const STEP_LABEL = { write_file: 'Wrote code', write_files: 'Wrote the project files', read_file: 'Read code', list_files: 'Looked at files', run_checks: 'Tested in the sandbox',
   finish: 'Wrapped up', invalid: 'Retried a garbled reply', gave_up: 'Stopped', done: 'Done',
   contract: 'Generated contract tests', write_test: 'Wrote tests', read_test: 'Read tests', run_tests: 'Ran the tests',
-  verdict: 'Test result', restored: 'Kept the last working code', design: 'Designed the API' };
+  verdict: 'Test result', restored: 'Kept the last working code', design: 'Designed the API', layout: 'Checked the project layout' };
 
 function coderSteps() {
   // build logs (coder, tester, orchestrator) since the most recent architect entry
@@ -830,7 +830,8 @@ function buildCard() {
     : failed ? '<span class="pill bad">Failed</span>' : '<span class="pill">Queued</span>';
   const rows = steps.filter(l => l.action !== 'done').map(l => {
     const warn = l.action === 'invalid' || l.action === 'gave_up' || l.action === 'restored'
-      || (l.action === 'verdict' && /failed|bugs|error|did not run/.test(l.detail));
+      || (l.action === 'verdict' && /failed|bugs|error|did not run/.test(l.detail))
+      || (l.action === 'layout' && /missing|move them/.test(l.detail));
     return `<div class="step ${warn ? 'warn' : ''}"><span class="ic">${icon(warn ? 'alert' : 'check')}</span>
       <div><b>${l.agent === 'tester' ? '<em class="agent-tag">Tester</em>' : ''}${STEP_LABEL[l.action] || esc(l.action)}</b>${l.detail ? `<span>${esc(l.detail.slice(0, 160))}</span>` : ''}</div></div>`;
   }).join('');

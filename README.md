@@ -136,7 +136,7 @@ There is **no approval step and no separate tester**. A change request, with its
 
 `solo` is the default, except with `REQUIREMENTS_AGENT=stub` (the offline replay, used by the hosted site), which stays on the team flow. Henry's `agents/single.py` is a different thing: the bare benchmark baseline, which writes code and tests but can't run them.
 
-A first live run (Haiku) built a library app in 70 s: 3 entities, 14 endpoints, 60 of 60 tests passed, about 150k tokens including the chat.
+A live run (Haiku) built a library app in 77 s in the standard layout (`routers/`, `schemas/`, `services/` per entity, plus README, Dockerfile, requirements): 3 entities, 14 endpoints, 66 of 66 tests passed, about 180k tokens including the chat.
 
 Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). Today the gateway sends them, joined into one message, when the running job ends: before a spec they go to the Requirements agent, after it they are a change request. Routing them sooner, after the current agent step, is Role 2's.
 
@@ -225,6 +225,12 @@ options = ClaudeAgentOptions(
 
 Every generated project has the same layout. The Coder writes `app/`, the Tester writes `tests/`, and our code writes the rest.
 
+It is enforced, not just suggested. `core/layout.py` holds:
+- **`LAYOUT`:** the rules as the coding agent reads them in its prompt.
+- **`check()`:** reports missing files, files not named after an entity, and endpoint handlers left in `main.py`. The agent gets these back with its test results and fixes them like failing tests.
+- **`tidy()`:** removes files the agent emptied, because it has no delete tool.
+- **`scaffold()`:** after every build, writes `spec.json`, `README.md` (how to run it, endpoints, rules), `requirements.txt`, `Dockerfile` and `.gitignore`.
+
 ```
 workspace/<project>/
 ├── spec.json                 # approved spec (written by the orchestrator)
@@ -237,7 +243,7 @@ workspace/<project>/
 │   └── services/<entity>.py  # business rules (when the spec has them)
 ├── tests/                    # Tester only
 ├── data/app.db               # SQLite file (serve sandbox only, gitignored)
-├── README.md, requirements.txt, Dockerfile   # scaffolded by us
+├── README.md, requirements.txt, Dockerfile, .gitignore   # scaffolded by us (core/layout.py)
 ```
 
 Conventions for `app/database.py`:
@@ -463,7 +469,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Check sandbox: no network, read-only code, throwaway DB, 120 s limit
 - [ ] Serve sandbox: read-only code, writable `data/`, localhost port, port allocation, idle stop
 - [ ] Block outbound network for the serve sandbox
-- [ ] Coder agent on the SDK: prompt with layout and SQLite conventions
+- [ ] Coder agent on the SDK: prompt with layout and SQLite conventions (reuse `core/layout.LAYOUT` in the prompt and `layout.check()` in `run_checks`, as `agents/solo.py` does)
 - [ ] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it
 - [ ] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
 - [ ] Custom tools: `run_checks`, `finish_build` (finish gate)
