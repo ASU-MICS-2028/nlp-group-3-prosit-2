@@ -139,7 +139,7 @@ The SDK runs the Thought → Action → Observation loop for us. For each agent 
 | Requirements | Understand what the user wants | `ask_user` (with quick replies), `propose_summary`, `confirm_summary`, `decline` | The user confirms the summary (**Looks right**); the stored draft, already checked against the schema, becomes `state.requirements` |
 | Architect | Turn requirements into a spec | `submit_spec` | Spec validates and the user approves it |
 | Coder | Build the API from the spec | `Read`, `Write`, `Edit`, `Glob`, `Grep` (workspace only), `run_checks`, `search_patterns`, `finish_build` | `finish_build` accepted |
-| Tester | Find bugs | `Read`, `Glob`, `Grep`, `Write` (`tests/` only), `run_tests`, `submit_report` | All tests pass, or report submitted |
+| Tester | Find bugs | `Read`, `Write`, `Edit` (`tests/` only), `run_tests`, `submit_report` | All tests pass, or report submitted |
 
 A sketch of how the Coder is configured (Role 3 owns the real version in `agents/coder.py`):
 
@@ -467,8 +467,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Write hidden tests for each scenario
 
 **Build**
-- [ ] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
-- [ ] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
+- [x] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
+- [x] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
 - [ ] Agree the failure-report format with Role 3
 - [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
 - [ ] `search_patterns` tool for the Coder
