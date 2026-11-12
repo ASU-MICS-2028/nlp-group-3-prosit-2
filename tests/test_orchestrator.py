@@ -114,6 +114,7 @@ def test_spec_is_split_into_build_tasks():
     assert len(tasks) == 1 + 3 + 1                            # setup, Patient, Doctor, Appointment, rules
     assert "GET /health" in tasks[0]
     assert tasks[3].startswith("Appointment:") and "POST /appointments (user)" in tasks[3]
+    assert "Belongs to: Patient, Doctor" in tasks[3]
     assert tasks[-1].startswith("Business rules:")
 
 
