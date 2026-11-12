@@ -86,3 +86,21 @@ def test_layout_check_and_scaffold(tmp_path):
     layout.scaffold(tmp_path, spec)
     assert spec.project_name in (tmp_path / "README.md").read_text()
     assert all((tmp_path / f).exists() for f in ["spec.json", "requirements.txt", "Dockerfile", ".gitignore"])
+
+
+def test_changes_edit_in_place_and_are_reported(tmp_path):
+    from core.sdk import deny_reason
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "main.py").write_text("x = 1\n")
+    write = lambda path, content: deny_reason("Write", {"file_path": path, "content": content}, str(tmp_path),
+                                              edit_in_place=True)
+    assert "Use Edit" in write("app/main.py", "everything rewritten")
+    assert write("app/routers/export.py", "new file") == ""      # new files are fine
+    assert write("app/main.py", "") == ""                        # emptying = removing (tidy deletes it)
+    assert deny_reason("Write", {"file_path": "app/main.py", "content": "x"}, str(tmp_path)) == ""   # first build
+    assert "Not allowed" in write("../elsewhere.py", "x")
+
+    before = solo.snapshot(tmp_path)
+    (tmp_path / "app" / "main.py").write_text("x = 2\n")
+    (tmp_path / "app" / "export.py").write_text("y = 1\n")
+    assert solo.what_changed(before, solo.snapshot(tmp_path)) == "Changed app/main.py; Added app/export.py"

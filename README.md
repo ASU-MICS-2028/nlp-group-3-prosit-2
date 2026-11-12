@@ -126,7 +126,7 @@ The same app can run with **one agent** instead of the team. The chat is unchang
 3. It calls `run_tests`, which runs the same pytest run and platform contract tests as the Tester's. It fixes failures and repeats, up to 6 runs.
 4. Our code runs the tests one last time. That run is the verdict, not the model's word.
 
-There is **no approval step and no separate tester**. A change request, with its `@` files, or **Rebuild** sends the same agent back to edit the existing project. It clears `change_request` and `change_files` once it has applied them.
+There is **no approval step and no separate tester**. A change request, with its `@` files, or **Rebuild** sends the same agent back to edit the existing project. It clears `change_request` and `change_files` once it has applied them. On an existing project it must **edit in place**: `Write` is refused for files that already exist (`core/sdk.deny_reason`, `edit_in_place=True`), so it uses `Edit` and only the part that needs changing is replaced. The build card lists what changed, e.g. *Changed app/routers/book.py, tests/test_api.py*.
 
 | | Team (`PIPELINE=team`) | One agent (`PIPELINE=solo`) |
 | --- | --- | --- |

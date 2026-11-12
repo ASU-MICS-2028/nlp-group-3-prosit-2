@@ -83,8 +83,18 @@ SESSIONS: dict[str, Session] = {}
 def sess(request: Request) -> Session:
     sid = request.state.sid
     if sid not in SESSIONS:
-        SESSIONS[sid] = Session(sid)
+        SESSIONS[sid] = s = Session(sid)
+        _resume(s)
     return SESSIONS[sid]
+
+
+def _resume(s: Session) -> None:
+    """A browser we know, after a gateway restart (or a deploy): reopen its most recent project
+    instead of showing an empty one, so the next message continues it."""
+    saved = sorted(s.root.glob("*/state.json"), key=lambda f: f.stat().st_mtime)
+    if saved:
+        data = json.loads(saved[-1].read_text())
+        s.state, s.revisions = ProjectState.model_validate(data["state"]), data.get("revisions", [])
 
 
 def _slug(name: str) -> str:

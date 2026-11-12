@@ -749,7 +749,7 @@ const CHIPS = [
 const STEP_LABEL = { write_file: 'Wrote code', write_files: 'Wrote the project files', read_file: 'Read code', list_files: 'Looked at files', run_checks: 'Tested in the sandbox',
   finish: 'Wrapped up', invalid: 'Retried a garbled reply', gave_up: 'Stopped', done: 'Done',
   contract: 'Generated contract tests', write_test: 'Wrote tests', read_test: 'Read tests', run_tests: 'Ran the tests',
-  verdict: 'Test result', restored: 'Kept the last working code', design: 'Designed the API', layout: 'Checked the project layout' };
+  verdict: 'Test result', restored: 'Kept the last working code', design: 'Designed the API', layout: 'Checked the project layout', changes: 'Updated your project' };
 
 function coderSteps() {
   // build logs (coder, tester, orchestrator) since the most recent architect entry

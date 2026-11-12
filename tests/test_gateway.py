@@ -232,3 +232,16 @@ def test_solo_pipeline_builds_right_after_the_chat(client, monkeypatch):
     client.post("/api/chat", json={"text": "In @app/main.py let patients reschedule"})
     s = wait_idle(client)
     assert len(calls) == 2 and "@app/main.py" in calls[1] and s["phase"] == "built"
+
+
+def test_project_comes_back_after_a_restart(client):
+    """Sessions live in memory: after a restart (or deploy) the browser gets its last project back,
+    so the next message continues it instead of starting a new one."""
+    import server.app as gw
+    build_golden(client)
+    gw.SESSIONS.clear()                                    # what a restart does
+    s = client.get("/api/state").json()
+    assert s["phase"] == "built" and s["state"]["spec"]["project_name"] == "Clinic Appointments"
+    client.post("/api/chat", json={"text": "Let patients reschedule"})
+    s = wait_idle(client)
+    assert s["revisions"] == ["Let patients reschedule"] and len(client.get("/api/projects").json()["projects"]) == 1
