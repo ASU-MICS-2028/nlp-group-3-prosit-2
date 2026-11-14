@@ -29,11 +29,26 @@ def allowed(tool: str, path: str, workspace: str, writable: tuple = WRITABLE) ->
     return any(target.is_relative_to(ws / folder) and target != ws / folder for folder in writable)
 
 
+def deny_reason(tool: str, tool_input: dict, workspace: str, writable: tuple = WRITABLE,
+                edit_in_place: bool = False) -> str:
+    """Why a file tool call is refused, or "" if it is fine."""
+    path = tool_input.get("file_path", "")
+    if not allowed(tool, path, workspace, writable):
+        return (f"Not allowed: {path}. Read inside the project; write only in "
+                + " or ".join(f"{folder}/" for folder in writable) + ".")
+    if edit_in_place and tool == "Write" and (Path(workspace) / path).is_file() and tool_input.get("content", "").strip():
+        return (f"{path} already exists. Use Edit to change only the part that needs changing "
+                "(Write is for new files, or empty content to remove a file).")
+    return ""
+
+
 async def run_agent(system: str, prompt: str, tools: dict, max_turns: int = 6, max_usd: float = 0.25,
-                    workspace: str | None = None, writable: tuple = WRITABLE) -> dict:
+                    workspace: str | None = None, writable: tuple = WRITABLE, edit_in_place: bool = False) -> dict:
     """Run the agent until it stops. Returns {"tokens": ..., "cost_usd": ...}.
     With a workspace, the agent may also Read, Write and Edit files there (see allowed()).
-    `writable` narrows the folders it may write in, e.g. ("tests",) for the Tester."""
+    `writable` narrows the folders it may write in, e.g. ("tests",) for the Tester.
+    `edit_in_place` (changes to an existing project): Write may create new files or empty old ones,
+    but an existing file is changed with Edit, so only the part that needs changing is replaced."""
     from claude_agent_sdk import (ClaudeAgentOptions, ClaudeSDKClient, HookMatcher, ResultMessage,
                                   create_sdk_mcp_server, tool)
 
@@ -56,13 +71,11 @@ async def run_agent(system: str, prompt: str, tools: dict, max_turns: int = 6, m
     builtin, hooks = [], {}
     if workspace:
         async def guard(input_data, tool_use_id, context):
-            path = input_data["tool_input"].get("file_path", "")
-            if allowed(input_data["tool_name"], path, workspace, writable):
+            reason = deny_reason(input_data["tool_name"], input_data["tool_input"], workspace, writable, edit_in_place)
+            if not reason:
                 return {}   # no objection
             return {"hookSpecificOutput": {
-                "hookEventName": "PreToolUse", "permissionDecision": "deny",
-                "permissionDecisionReason": f"Not allowed: {path}. Read inside the project; write only in "
-                                            + " or ".join(f"{folder}/" for folder in writable) + "."}}
+                "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}}
 
         builtin = FILE_TOOLS
         allowed_tools += FILE_TOOLS

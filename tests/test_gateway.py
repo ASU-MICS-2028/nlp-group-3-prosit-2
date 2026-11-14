@@ -1,6 +1,7 @@
 """Gateway end to end on the stub agents: chat -> spec -> approve -> build -> files -> run -> proxy."""
 import importlib
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -185,14 +186,14 @@ def test_requirements_agent_through_the_gateway(client, monkeypatch):
 def test_messages_sent_while_busy_are_queued(client, monkeypatch):
     """A message sent during a job is shown as waiting, then sent when the job ends (not refused)."""
     import asyncio
-    import server.app as gw
+    from agents import orchestrator
     from core.state import Message
 
     async def slow(state, emit):
         await asyncio.sleep(0.3)
         state.chat.append(Message(role="assistant", content=f"Got {len(state.chat)}"))
         return state
-    monkeypatch.setattr(gw, "requirements", slow)
+    monkeypatch.setitem(orchestrator.AGENTS, "requirements", slow)
 
     client.post("/api/chat", json={"text": "I run a bakery"})
     s = client.post("/api/chat", json={"text": "We also deliver"}).json()
@@ -209,3 +210,55 @@ def test_mentioned_files_reach_the_change_request(client):
     s = wait_idle(client)
     assert s["state"]["change_files"] == ["app/main.py"]   # only real files, once each
     assert "add reviews" in s["revisions"][-1]
+
+
+def test_solo_pipeline_builds_right_after_the_chat(client, monkeypatch):
+    """PIPELINE=solo: confirm the requirements -> one agent builds, no approval step; a change rebuilds."""
+    from agents import orchestrator
+    from test_solo import scripted
+    monkeypatch.setenv("PIPELINE", "solo")
+    calls = []
+
+    async def fake_solo(state, emit):
+        from agents import solo
+        return await solo.run(state, emit, runner=scripted(Path(state.workspace), calls))
+    monkeypatch.setitem(orchestrator.AGENTS, "solo", fake_solo)
+
+    client.post("/api/chat", json={"text": "I run a clinic"}); wait_idle(client)
+    client.post("/api/chat", json={"text": "Patients and staff"})   # stub confirms here
+    s = wait_idle(client)
+    assert s["phase"] == "built" and s["state"]["tests_ok"], s["state"]["test_report"]
+    assert not any(l["agent"] == "architect" for l in s["state"]["logs"])
+    client.post("/api/chat", json={"text": "In @app/main.py let patients reschedule"})
+    s = wait_idle(client)
+    assert len(calls) == 2 and "@app/main.py" in calls[1] and s["phase"] == "built"
+
+
+def test_project_comes_back_after_a_restart(client):
+    """Sessions live in memory: after a restart (or deploy) the browser gets its last project back,
+    so the next message continues it instead of starting a new one."""
+    import server.app as gw
+    build_golden(client)
+    gw.SESSIONS.clear()                                    # what a restart does
+    s = client.get("/api/state").json()
+    assert s["phase"] == "built" and s["state"]["spec"]["project_name"] == "Clinic Appointments"
+    client.post("/api/chat", json={"text": "Let patients reschedule"})
+    s = wait_idle(client)
+    assert s["revisions"] == ["Let patients reschedule"] and len(client.get("/api/projects").json()["projects"]) == 1
+
+
+def test_changes_keep_earlier_versions_in_order(client):
+    """The chat is a timeline: version 1 (design + build), the change request, then version 2."""
+    import server.app as gw
+    built = build_golden(client)
+    client.post("/api/chat", json={"text": "Add a waiting list"})
+    s = wait_idle(client)
+    [r] = s["rounds"]
+    assert r["request"] == "Add a waiting list" and r["spec"]["project_name"] == built["state"]["spec"]["project_name"]
+    assert r["build"]["tests_ok"] and r["build"]["test_summary"] == built["state"]["test_summary"]
+    assert r["log_end"] == len(built["state"]["logs"])                # its build steps are logs[:log_end]
+    client.post("/api/chat", json={"text": "And reminders"}); wait_idle(client)
+    gw.SESSIONS.clear()                                             # survives a restart
+    rounds = client.get("/api/state").json()["rounds"]
+    assert [r["request"] for r in rounds] == ["Add a waiting list", "And reminders"]
+    assert rounds[1]["build"] is None                                # version 2 was never approved and built

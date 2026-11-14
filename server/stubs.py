@@ -106,9 +106,12 @@ async def serve(workspace: str, root_path: str) -> tuple[subprocess.Popen, int]:
     """Start the API on 127.0.0.1 and wait until GET /health answers 200. root_path is the gateway
     prefix, so /docs finds its openapi.json. An API without a health check is refused."""
     port = _free_port()
+    data = Path(workspace) / "data"   # each API keeps its own database (shared convention: DATABASE_PATH)
+    data.mkdir(exist_ok=True)
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port), "--root-path", root_path],
-        cwd=workspace, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        cwd=workspace, env={**os.environ, "DATABASE_PATH": str(data / "app.db")},
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     async with httpx.AsyncClient() as c:
         for _ in range(50):
             if proc.poll() is not None:

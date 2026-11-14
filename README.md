@@ -117,6 +117,27 @@ flowchart LR
 6. **Fix.** The failure report sends the Coder back into its loop (`MAX_FIX_ROUNDS`, default 1). The Coder cannot edit `tests/`. If a fix round breaks the build, the last working code is restored and the known failures are reported honestly.
 7. **Deliver.** The orchestrator starts the API in the serve sandbox and returns a `BuildResult`: base URL, docs URL, endpoint list, test summary and any known failures.
 
+### Single-agent workflow (`PIPELINE=solo`)
+
+The same app can run with **one agent** instead of the team. The chat is unchanged. After **Looks right**, a single agent (`agents/solo.py`) works in one session:
+
+1. It designs the spec and calls `submit_spec`. The spec gets the same checks as the Architect's (`architect.check_spec`) and appears in the chat as it is accepted.
+2. It writes `app/` and `tests/test_api.py`. Its file tools are guarded like the Coder's: it can only write in `app/` and `tests/`.
+3. It calls `run_tests`, which runs the same pytest run and platform contract tests as the Tester's. It fixes failures and repeats, up to 6 runs.
+4. Our code runs the tests one last time. That run is the verdict, not the model's word.
+
+There is **no approval step and no separate tester**. A change request, with its `@` files, or **Rebuild** sends the same agent back to edit the existing project. It clears `change_request` and `change_files` once it has applied them. On an existing project it must **edit in place**: `Write` is refused for files that already exist (`core/sdk.deny_reason`, `edit_in_place=True`), so it uses `Edit` and only the part that needs changing is replaced. The build card lists what changed, e.g. *Changed app/routers/book.py, tests/test_api.py*.
+
+| | Team (`PIPELINE=team`) | One agent (`PIPELINE=solo`) |
+| --- | --- | --- |
+| After the chat | Architect → you approve → Coder ⇄ Tester | One agent designs, builds and tests |
+| Who writes the tests | Tester, from the spec, cannot touch `app/` | The same agent that wrote the code |
+| Checks | `check_spec`, contract tests, final pytest run | The same |
+
+`solo` is the default, except with `REQUIREMENTS_AGENT=stub` (the offline replay, used by the hosted site), which stays on the team flow. Henry's `agents/single.py` is a different thing: the bare benchmark baseline, which writes code and tests but can't run them.
+
+A live run (Haiku) built a library app in 77 s in the standard layout (`routers/`, `schemas/`, `services/` per entity, plus README, Dockerfile, requirements): 3 entities, 14 endpoints, 66 of 66 tests passed, about 180k tokens including the chat.
+
 Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). Today the gateway sends them, joined into one message, when the running job ends: before a spec they go to the Requirements agent, after it they are a change request. Routing them sooner, after the current agent step, is Role 2's.
 
 ### Change requests and `@` mentions
@@ -128,7 +149,7 @@ After the spec exists, everything the user types is a **change request**. The us
 | `state.change_request` | gateway | The user's words, unchanged (mentions included) |
 | `state.change_files` | gateway | The `@`-mentioned paths that really exist in the workspace, in order, no duplicates (e.g. `["app/main.py"]`). Unknown names and email addresses are ignored. |
 
-The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). A new change request overwrites both fields.
+The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). A new change request overwrites both fields. In the chat, each request appears right after the version it replaced. Earlier versions stay in place, collapsed, with their design and build (the gateway keeps them as `rounds`).
 
 ### Inside each agent
 
@@ -204,6 +225,12 @@ options = ClaudeAgentOptions(
 
 Every generated project has the same layout. The Coder writes `app/`, the Tester writes `tests/`, and our code writes the rest.
 
+It is enforced, not just suggested. `core/layout.py` holds:
+- **`LAYOUT`:** the rules as the coding agent reads them in its prompt.
+- **`check()`:** reports missing files, files not named after an entity, and endpoint handlers left in `main.py`. The agent gets these back with its test results and fixes them like failing tests.
+- **`tidy()`:** removes files the agent emptied, because it has no delete tool.
+- **`scaffold()`:** after every build, writes `spec.json`, `README.md` (how to run it, endpoints, rules), `requirements.txt`, `Dockerfile` and `.gitignore`.
+
 ```
 workspace/<project>/
 ├── spec.json                 # approved spec (written by the orchestrator)
@@ -216,7 +243,7 @@ workspace/<project>/
 │   └── services/<entity>.py  # business rules (when the spec has them)
 ├── tests/                    # Tester only
 ├── data/app.db               # SQLite file (serve sandbox only, gitignored)
-├── README.md, requirements.txt, Dockerfile   # scaffolded by us
+├── README.md, requirements.txt, Dockerfile, .gitignore   # scaffolded by us (core/layout.py)
 ```
 
 Conventions for `app/database.py`:
@@ -323,6 +350,7 @@ claude                                                 # once: log in with your 
 LLM_MODEL=claude-haiku-5-5      # cheap for development; use claude-sonnet-5-5 for demos and benchmark runs
 MAX_TURNS=30                    # per agent session
 MAX_FIX_ROUNDS=1
+PIPELINE=solo                   # solo: one agent builds after the chat | team: architect, approval, coder, tester
 SANDBOX=docker                  # docker | local (local is NOT isolated)
 SERVE_PORT_RANGE=8100-8199
 PUBLISH_URL=http://{sub}.localhost:8000   # where published APIs live; hosted: https://{sub}.your-domain
@@ -441,7 +469,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Check sandbox: no network, read-only code, throwaway DB, 120 s limit
 - [ ] Serve sandbox: read-only code, writable `data/`, localhost port, port allocation, idle stop
 - [ ] Block outbound network for the serve sandbox
-- [ ] Coder agent on the SDK: prompt with layout and SQLite conventions
+- [ ] Coder agent on the SDK: prompt with layout and SQLite conventions (reuse `core/layout.LAYOUT` in the prompt and `layout.check()` in `run_checks`, as `agents/solo.py` does)
 - [ ] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it
 - [ ] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
 - [ ] Custom tools: `run_checks`, `finish_build` (finish gate)

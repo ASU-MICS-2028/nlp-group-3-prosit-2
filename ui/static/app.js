@@ -749,11 +749,10 @@ const CHIPS = [
 const STEP_LABEL = { write_file: 'Wrote code', write_files: 'Wrote the project files', read_file: 'Read code', list_files: 'Looked at files', run_checks: 'Tested in the sandbox',
   finish: 'Wrapped up', invalid: 'Retried a garbled reply', gave_up: 'Stopped', done: 'Done',
   contract: 'Generated contract tests', write_test: 'Wrote tests', read_test: 'Read tests', run_tests: 'Ran the tests',
-  verdict: 'Test result', restored: 'Kept the last working code' };
+  verdict: 'Test result', restored: 'Kept the last working code', design: 'Designed the API', layout: 'Checked the project layout', changes: 'Updated your project' };
 
-function coderSteps() {
+function coderSteps(logs = S.state.logs) {
   // build logs (coder, tester, orchestrator) since the most recent architect entry
-  const logs = S.state.logs;
   let start = 0;
   logs.forEach((l, i) => { if (l.agent === 'architect' || (l.agent === 'orchestrator' && l.action === 'build')) start = i + 1; });
   return logs.slice(start).filter(l => l.agent !== 'architect' && l.agent !== 'requirements');
@@ -761,7 +760,7 @@ function coderSteps() {
 
 function renderChat() {
   const st = S.state;
-  const key = JSON.stringify([st.chat.length, st.spec, st.spec_approved, st.build_ok, st.logs.length, S.busy, S.error, S.revisions, S.queued, S.server]);
+  const key = JSON.stringify([st.chat.length, st.spec, st.spec_approved, st.build_ok, st.logs.length, S.busy, S.error, S.revisions, S.rounds, S.queued, S.server, [...pastOpen]]);
   const el = $('#messages');
   if (key === lastChatKey) { updateElapsed(); return; }
   lastChatKey = key;
@@ -779,9 +778,16 @@ function renderChat() {
     html += `<div class="msg ${m.role}">${m.role === 'assistant' ? md(m.content) : userText(m.content)}</div>`;
     prevRole = m.role;
   }
-  for (const r of S.revisions) html += `<div class="msg user">${userText(r)}</div>`;
-  if (st.spec) html += specCard();
-  if (st.spec_approved) html += buildCard();
+  // the timeline: each change request comes after the version it replaced (kept, collapsed)
+  const rounds = S.rounds || [];
+  for (const r of S.revisions.slice(0, S.revisions.length - rounds.length)) html += `<div class="msg user">${userText(r)}</div>`;   // asked before rounds were kept
+  rounds.forEach((r, i) => { if (r.spec) html += pastRound(r, i); html += `<div class="msg user">${userText(r.request)}</div>`; });
+  // while a change is running, don't show the old version a second time: only what is new
+  const last = S.busy && rounds[rounds.length - 1];
+  const newSpec = !last || JSON.stringify(st.spec) !== JSON.stringify(last.spec);
+  const newBuild = !last || st.logs.slice(last.log_end).some(l => l.agent === 'orchestrator' && l.action === 'build');
+  if (st.spec && newSpec) html += specCard();
+  if (st.spec_approved && newBuild) html += buildCard();
   for (const q of S.queued || []) html += `<div class="msg user queued">${userText(q)}</div><div class="queued-note">I'll read this when I'm done</div>`;
   if (S.busy && !(st.spec_approved && S.busy.startsWith('Building'))) {
     html += `<div class="typing"><div class="dots"><span></span><span></span><span></span></div>${esc(S.busy)} <span class="elapsed"></span></div>`;
@@ -805,9 +811,24 @@ function updateElapsed() {
 }
 setInterval(updateElapsed, 1000);
 
-function specCard() {
-  const sp = S.state.spec, review = S.state.spec_approved === false;
-  const pill = review ? '<span class="pill run">Needs your OK</span>' : '<span class="pill ok">Approved</span>';
+// earlier versions in the chat: collapsed, open on click (open state survives re-renders)
+const pastOpen = new Set();
+document.addEventListener('toggle', e => {
+  const i = e.target.dataset?.round;
+  if (i === undefined) return;
+  e.target.open ? pastOpen.add(i) : pastOpen.delete(i);
+}, true);
+function pastRound(r, i) {
+  const b = r.build;
+  const how = !b ? 'Not built' : !b.build_ok ? 'Build failed' : b.test_summary ? `Built · ${b.test_summary}` : 'Built';
+  return `<details class="past" data-round="${i}" ${pastOpen.has(String(i)) ? 'open' : ''}>
+    <summary>${icon('layers')}<b>Version ${i + 1}</b><span>${r.spec.endpoints.length} endpoints · ${esc(how)}</span>${icon('chevronDown')}</summary>
+    ${specCard(r.spec, false, false)}${b ? buildCard({ ...b, spec: r.spec }, coderSteps(S.state.logs.slice(0, r.log_end)), false) : ''}</details>`;
+}
+
+function specCard(sp = S.state.spec, review = S.state.spec_approved === false, live = true) {
+  const pill = !live ? '<span class="pill">Earlier version</span>'
+    : review ? '<span class="pill run">Needs your OK</span>' : '<span class="pill ok">Approved</span>';
   return `<div class="acard"><div class="acard-head">${icon('layers')}${esc(sp.project_name)} · design ${pill}</div>
     <div class="acard-body">
       <p class="desc">${esc(sp.description)}</p>
@@ -818,19 +839,19 @@ function specCard() {
         <code>${esc(e.path)}</code><span class="s">${esc(e.summary)}</span><span class="acc">${e.access}</span></div>`).join('')}</div>
       ${sp.rules.length ? `<h5>Rules</h5><ul class="rules">${sp.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
     </div>
-    ${review && !S.busy ? `<div class="acard-foot"><button class="btn primary" id="approve">${icon('check')}Approve & build</button>
+    ${live && review && !S.busy ? `<div class="acard-foot"><button class="btn primary" id="approve">${icon('check')}Approve & build</button>
       <button class="btn" id="request-change">Request a change</button></div>` : ''}</div>`;
 }
 
-function buildCard() {
-  const st = S.state, steps = coderSteps();
-  const building = S.busy && S.busy.startsWith('Building');
+function buildCard(st = S.state, steps = coderSteps(), live = true) {
+  const building = live && S.busy && S.busy.startsWith('Building');
   const failed = !building && !st.build_ok && steps.some(l => l.action === 'gave_up');
   const pill = building ? '<span class="pill run">Building</span>' : st.build_ok ? '<span class="pill ok">Built</span>'
     : failed ? '<span class="pill bad">Failed</span>' : '<span class="pill">Queued</span>';
   const rows = steps.filter(l => l.action !== 'done').map(l => {
     const warn = l.action === 'invalid' || l.action === 'gave_up' || l.action === 'restored'
-      || (l.action === 'verdict' && /failed|bugs|error|did not run/.test(l.detail));
+      || (l.action === 'verdict' && /failed|bugs|error|did not run/.test(l.detail))
+      || (l.action === 'layout' && /missing|move them/.test(l.detail));
     return `<div class="step ${warn ? 'warn' : ''}"><span class="ic">${icon(warn ? 'alert' : 'check')}</span>
       <div><b>${l.agent === 'tester' ? '<em class="agent-tag">Tester</em>' : ''}${STEP_LABEL[l.action] || esc(l.action)}</b>${l.detail ? `<span>${esc(l.detail.slice(0, 160))}</span>` : ''}</div></div>`;
   }).join('');
@@ -838,11 +859,12 @@ function buildCard() {
   const contract = (st.test_results || []).filter(r => r.file === 'tests/test_contract.py').length;
   const strip = st.build_ok && !building && tc.total ? `<div class="test-strip ${tc.failed ? 'bad' : 'ok'}">${icon(tc.failed ? 'alert' : 'check')}
     <div><b>${tc.passed} of ${tc.total} tests passed</b>${contract ? `<span>${contract} contract · ${tc.total - contract} behaviour</span>` : ''}</div>
-    <button class="btn" data-go="tests">${icon('flask')}View tests</button></div>` : '';
-  const live = building ? `<div class="step live"><span class="ic"><span class="spin"></span></span>
+    ${live ? `<button class="btn" data-go="tests">${icon('flask')}View tests</button>` : ''}</div>` : '';
+  const spinner = building ? `<div class="step live"><span class="ic"><span class="spin"></span></span>
     <div><b>Working...</b><span class="elapsed"></span></div></div>` : '';
   let foot = '';
-  if (st.build_ok && !building) {
+  if (!live) foot = '';
+  else if (st.build_ok && !building) {
     foot = `<div class="acard-foot">
       <button class="btn" data-open="app/main.py">${icon('code')}View code</button>
       ${st.tests_ok === false ? `<button class="btn" id="rebuild">${icon('refresh')}Rebuild</button>` : ''}
@@ -852,16 +874,16 @@ function buildCard() {
   } else if (failed) {
     foot = `<div class="acard-foot"><button class="btn primary" id="rebuild">${icon('refresh')}Try again</button></div>`;
   }
-  const running = S.published ? ` It's live at <a href="${esc(S.published.url)}" target="_blank">${esc(S.published.url.replace(/^https?:\/\//, ''))}</a>.` : '';
-  const tests = st.tests_ok ? ' The tester checked it against your design.'
+  const running = live && S.published ? ` It's live at <a href="${esc(S.published.url)}" target="_blank">${esc(S.published.url.replace(/^https?:\/\//, ''))}</a>.` : '';
+  const tests = st.tests_ok ? ' It was checked against your design.'
     : st.tests_ok === false ? '' : ' Not tested yet.';
   const summary = st.build_ok && !building
     ? `<p class="desc" style="margin-bottom:10px">Your API is built: ${st.spec.endpoints.length} endpoints.${tests}${running}</p>
       ${st.tests_ok === false ? `<div class="known-issues">${icon('alert')}<div><b>Known problems (${esc(st.test_summary)})</b>
-        <p>The tester found these and the coder couldn't fix them. Ask for a change or try building again.</p>
+        <p>These checks still fail. Ask for a change or try building again.</p>
         <pre>${esc(st.test_report || '')}</pre></div></div>` : ''}` : '';
   return `<div class="acard"><div class="acard-head">${icon('code')}Build ${pill}</div>
-    <div class="acard-body">${summary}<div class="steps">${rows}${live}${!rows && !live && !st.build_ok ? '<span class="desc">Waiting to start...</span>' : ''}</div>${strip}</div>${foot}</div>`;
+    <div class="acard-body">${summary}<div class="steps">${rows}${spinner}${!rows && !spinner && !st.build_ok ? '<span class="desc">Waiting to start...</span>' : ''}</div>${strip}</div>${foot}</div>`;
 }
 
 function renderComposer() {
@@ -883,8 +905,13 @@ async function send(text) {
     return;
   }
   // optimistic bubble
-  if (S.phase === 'chat') S.state.chat.push({ role: 'user', content: text });
-  else S.revisions.push(text);
+  const st = S.state;
+  if (S.phase === 'chat' && !(st.requirements && !st.spec)) st.chat.push({ role: 'user', content: text });
+  else {   // a change request: same shape as the gateway's round
+    S.revisions.push(text);
+    (S.rounds ||= []).push({ request: text, spec: st.spec, log_end: st.logs.length, build: st.spec_approved
+      ? { build_ok: st.build_ok, tests_ok: st.tests_ok, test_summary: st.test_summary, test_results: st.test_results, test_report: st.test_report } : null });
+  }
   S.busy = 'Thinking...'; busySince = Date.now(); lastChatKey = ''; render();
   await act('/api/chat', { text });
 }
