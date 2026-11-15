@@ -185,14 +185,14 @@ def test_requirements_agent_through_the_gateway(client, monkeypatch):
 def test_messages_sent_while_busy_are_queued(client, monkeypatch):
     """A message sent during a job is shown as waiting, then sent when the job ends (not refused)."""
     import asyncio
-    import server.app as gw
+    from agents import orchestrator
     from core.state import Message
 
     async def slow(state, emit):
         await asyncio.sleep(0.3)
         state.chat.append(Message(role="assistant", content=f"Got {len(state.chat)}"))
         return state
-    monkeypatch.setattr(gw, "requirements", slow)
+    monkeypatch.setitem(orchestrator.AGENTS, "requirements", slow)
 
     client.post("/api/chat", json={"text": "I run a bakery"})
     s = client.post("/api/chat", json={"text": "We also deliver"}).json()
