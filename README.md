@@ -477,7 +477,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)
 
 **Connect**
-- [ ] Tester ⇄ Coder loop (with Role 3)
+- [x] Tester ⇄ Coder loop (with Role 3): run on the golden clinic spec with the real agents; one failure found, fixed in one round, 73 tests passing
 
 **Evaluate**
 - [ ] Run the benchmark on the full system
