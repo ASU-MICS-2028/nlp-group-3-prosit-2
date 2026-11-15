@@ -1,0 +1,26 @@
+{
+  "project_name": "Event Tickets",
+  "description": "An organiser lists events and people get tickets while places last.",
+  "users": [
+    "people attending",
+    "the organiser"
+  ],
+  "data": [
+    "events with a name, when they start and how many places they have",
+    "tickets for an event with the holder's name and a status (valid or cancelled)"
+  ],
+  "actions": [
+    "the organiser adds and edits events",
+    "anyone can see the events",
+    "people get a ticket",
+    "people view a ticket",
+    "people cancel a ticket",
+    "the organiser sees all tickets"
+  ],
+  "rules": [
+    "an event cannot be created in the past",
+    "an event cannot have more valid tickets than places",
+    "a cancelled ticket frees its place",
+    "cancelled tickets are kept"
+  ]
+}

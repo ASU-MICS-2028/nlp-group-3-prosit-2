@@ -158,6 +158,28 @@ options = ClaudeAgentOptions(
 )
 ```
 
+### Benchmark scenarios and hidden tests
+
+`benchmark/scenarios/` holds 15 small projects, from a one-table notebook to bookings with overlap rules: clinic, notes, to-do, library, shop, courses, expenses, events, helpdesk, restaurant, car rentals, polls, savings wallet, school grades, pet adoption.
+
+| File | What it is |
+| --- | --- |
+| `requirements.json` | What the person asked for: the input of a full run |
+| `spec.json` | The reference spec: the input when only the Coder and Tester are measured, and what the Architect's spec is compared with |
+| `examples.json` | One valid body per entity, so the generic hidden tests can create records |
+| `rules.py` | Hidden tests for this scenario's business rules |
+
+**Hidden tests are the judge, and no agent ever sees them.** The Tester's own tests decide the fix rounds; the hidden tests decide the score. `benchmark.judge(scenario, app)` copies the built `app/` to a temporary folder and runs three files there: the contract tests (from the spec), `benchmark/generic_tests.py` (the same checks for every scenario: create, read, update, delete, 404, 409, 422) and the scenario's `rules.py`. The score is tests passed / tests run.
+
+```python
+import asyncio, benchmark
+
+scenario = benchmark.load("05-shop")
+verdict = asyncio.run(benchmark.judge(scenario, workspace / "app"))   # {"passed": 50, "total": 50, "score": 1.0, ...}
+```
+
+`tests/test_benchmark.py` checks every scenario offline: the spec passes the Architect's own checks, the examples match it, the rule tests only call endpoints the spec has, and on the golden clinic the hidden tests pass and catch six planted bugs.
+
 ### Key decisions
 
 | Decision | Why |
@@ -284,7 +306,7 @@ These are what let four people build separately and still fit together. **Changi
 ├── sandbox/                 # Dockerfile + check.py
 ├── rag/                     # pattern library, docs index, search tool (Role 4)
 ├── golden/clinic/           # golden example
-├── benchmark/               # scenarios + hidden tests (Role 4)
+├── benchmark/               # Role 4: scenarios/ (requirements, reference spec, hidden rule tests), generic hidden tests, judge()
 ├── eval/                    # benchmark runner, results to CSV
 ├── tests/                   # tests for our own code
 ├── workspace/               # generated projects (gitignored)
@@ -463,8 +485,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Set up**
 - [ ] Write the golden tests (against a throwaway SQLite DB)
-- [ ] Write 15–30 benchmark scenarios
-- [ ] Write hidden tests for each scenario
+- [x] Write 15–30 benchmark scenarios (15, in `benchmark/scenarios/`)
+- [x] Write hidden tests for each scenario (generic tests from the spec + rule tests per scenario; `benchmark.judge()`)
 
 **Build**
 - [x] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`

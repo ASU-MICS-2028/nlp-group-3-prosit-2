@@ -1,0 +1,25 @@
+{
+  "project_name": "Savings Wallet",
+  "description": "A savings group keeps an account for each member and records deposits and withdrawals.",
+  "users": [
+    "group members",
+    "the treasurer"
+  ],
+  "data": [
+    "accounts with the owner's name and a balance",
+    "transactions on an account with a kind (deposit or withdrawal) and an amount"
+  ],
+  "actions": [
+    "members open an account",
+    "members view an account",
+    "members deposit and withdraw money",
+    "members see the transactions of an account",
+    "the treasurer sees all accounts and all transactions"
+  ],
+  "rules": [
+    "a new account starts with nothing in it",
+    "nobody can withdraw more than is in the account",
+    "amounts must be more than zero",
+    "the balance is kept by the system"
+  ]
+}

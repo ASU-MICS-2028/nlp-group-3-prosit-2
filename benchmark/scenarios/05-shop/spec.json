@@ -1,0 +1,45 @@
+{
+  "project_name": "Corner Shop Orders",
+  "description": "A shop that keeps its stock and takes orders for its products.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Product",
+      "description": "Something the shop sells.",
+      "fields": [
+        {"name": "name", "type": "str", "unique": true},
+        {"name": "price", "type": "float"},
+        {"name": "stock", "type": "int"}
+      ]
+    },
+    {
+      "name": "Order",
+      "description": "An order for one product.",
+      "belongs_to": ["Product"],
+      "fields": [
+        {"name": "product_id", "type": "int"},
+        {"name": "quantity", "type": "int"},
+        {"name": "total", "type": "float", "read_only": true, "description": "price x quantity when the order was placed"},
+        {"name": "status", "type": "str", "read_only": true, "description": "placed or cancelled"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/products", "summary": "Add a product", "entity": "Product", "access": "admin", "request_fields": ["name", "price", "stock"], "status_code": 201},
+    {"method": "GET", "path": "/products", "summary": "List products", "entity": "Product", "access": "public", "status_code": 200},
+    {"method": "GET", "path": "/products/{id}", "summary": "Get a product", "entity": "Product", "access": "public", "status_code": 200},
+    {"method": "PATCH", "path": "/products/{id}", "summary": "Change a product", "entity": "Product", "access": "admin", "request_fields": ["name", "price", "stock"], "status_code": 200},
+    {"method": "POST", "path": "/orders", "summary": "Place an order", "entity": "Order", "access": "user", "request_fields": ["product_id", "quantity"], "status_code": 201},
+    {"method": "GET", "path": "/orders", "summary": "List all orders", "entity": "Order", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/orders/{id}", "summary": "Get an order", "entity": "Order", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/orders/{id}/cancel", "summary": "Cancel an order", "entity": "Order", "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "price must be greater than 0 and stock cannot be negative; reject with 422.",
+    "quantity must be at least 1; reject with 422.",
+    "Ordering more than the product's stock returns 409 and changes nothing.",
+    "Placing an order reduces the product's stock by the quantity. total is price x quantity and status is placed.",
+    "Cancelling sets status to cancelled and adds the quantity back to the stock. Cancelling an order that is already cancelled returns 409.",
+    "product_id must refer to an existing product; otherwise 404."
+  ]
+}

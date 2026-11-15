@@ -1,0 +1,5 @@
+{
+  "Student": {"create": {"full_name": "Yaw Darko", "email": "yaw@example.com"}},
+  "Course": {"create": {"title": "Bookkeeping", "capacity": 20}, "update": {"title": "Bookkeeping I", "capacity": 25}},
+  "Enrolment": {"create": {}}
+}

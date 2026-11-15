@@ -1,0 +1,60 @@
+{
+  "project_name": "Clinic Appointments",
+  "description": "A system for a small clinic where patients book appointments with doctors online and staff manage doctors and bookings.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Patient",
+      "description": "A person who books appointments.",
+      "fields": [
+        {"name": "full_name", "type": "str"},
+        {"name": "phone", "type": "str", "unique": true},
+        {"name": "email", "type": "email", "required": false},
+        {"name": "date_of_birth", "type": "date", "required": false}
+      ]
+    },
+    {
+      "name": "Doctor",
+      "description": "A doctor patients can book with.",
+      "fields": [
+        {"name": "full_name", "type": "str"},
+        {"name": "specialty", "type": "str", "description": "e.g. general practice, paediatrics"},
+        {"name": "phone", "type": "str", "required": false}
+      ]
+    },
+    {
+      "name": "Appointment",
+      "description": "A 30-minute booking of a patient with a doctor.",
+      "belongs_to": ["Patient", "Doctor"],
+      "fields": [
+        {"name": "patient_id", "type": "int"},
+        {"name": "doctor_id", "type": "int"},
+        {"name": "start_time", "type": "datetime"},
+        {"name": "reason", "type": "str", "required": false},
+        {"name": "status", "type": "str", "read_only": true, "description": "booked or cancelled; set by the server"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/patients", "summary": "Register a patient", "entity": "Patient", "access": "public", "request_fields": ["full_name", "phone", "email", "date_of_birth"], "status_code": 201},
+    {"method": "GET", "path": "/patients", "summary": "List all patients", "entity": "Patient", "access": "admin"},
+    {"method": "GET", "path": "/patients/{id}", "summary": "Get a patient", "entity": "Patient", "access": "user"},
+    {"method": "GET", "path": "/doctors", "summary": "List doctors", "entity": "Doctor", "access": "public"},
+    {"method": "GET", "path": "/doctors/{id}", "summary": "Get a doctor", "entity": "Doctor", "access": "public"},
+    {"method": "POST", "path": "/doctors", "summary": "Add a doctor", "entity": "Doctor", "access": "admin", "request_fields": ["full_name", "specialty", "phone"], "status_code": 201},
+    {"method": "PUT", "path": "/doctors/{id}", "summary": "Update a doctor", "entity": "Doctor", "access": "admin", "request_fields": ["full_name", "specialty", "phone"]},
+    {"method": "DELETE", "path": "/doctors/{id}", "summary": "Remove a doctor", "entity": "Doctor", "access": "admin", "status_code": 204},
+    {"method": "POST", "path": "/appointments", "summary": "Book an appointment", "entity": "Appointment", "access": "user", "request_fields": ["patient_id", "doctor_id", "start_time", "reason"], "status_code": 201},
+    {"method": "GET", "path": "/appointments", "summary": "List all appointments", "entity": "Appointment", "access": "admin"},
+    {"method": "GET", "path": "/appointments/{id}", "summary": "Get an appointment", "entity": "Appointment", "access": "user"},
+    {"method": "POST", "path": "/appointments/{id}/cancel", "summary": "Cancel an appointment (kept with status cancelled)", "entity": "Appointment", "access": "user"}
+  ],
+  "rules": [
+    "Each appointment lasts 30 minutes.",
+    "A doctor cannot have two booked appointments that overlap; reject with 409.",
+    "Appointments cannot start in the past; reject with 422.",
+    "Cancelling sets status to cancelled; appointments are never deleted.",
+    "Patient phone must be unique; reject duplicates with 409.",
+    "patient_id and doctor_id must refer to existing records; otherwise 404."
+  ]
+}
