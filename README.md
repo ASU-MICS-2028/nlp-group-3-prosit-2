@@ -79,6 +79,10 @@ The project menu at the top switches between generated projects, and **Download 
 
 ## Architecture
 
+![How Mesora Blocks turns a description into a running API](docs/architecture.png)
+
+For slides and the report: [`docs/architecture.svg`](docs/architecture.svg) (scales to any size) or [`docs/architecture.png`](docs/architecture.png) (3200×1800, for Google Slides). The overview below includes the Docker sandbox, which is still being built (Role 3).
+
 ```mermaid
 flowchart LR
     U["User (browser)"] -->|"HTTP + live events"| G["Gateway (FastAPI)"]
@@ -346,6 +350,7 @@ python run.py --golden clinic --serve       # keep the API running at the end (C
 pytest                                      # offline: no API calls, agents use recorded replies
 pytest -m live                              # real API calls (costs money)
 python -m eval.benchmark --out results/run.csv
+python -m eval.spec_compare workspace/<run>/state.json golden/clinic/spec.json --csv results/specs.csv
 ```
 
 ### Signing in to Claude
@@ -430,9 +435,9 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Full pipeline run on the golden example (`python run.py --golden clinic`)
 
 **Evaluate**
-- [ ] Compare generated specs with reference specs
-- [ ] Hand logs to Role 4
-- [ ] Architecture diagram for Section B and slides
+- [x] Compare generated specs with reference specs (`eval/spec_compare.py`; `run.py --golden` prints it)
+- [x] Hand logs to Role 4 (`python -m eval.export_logs` → `results/runs.csv`, `results/steps.csv`; columns in `eval/README.md`)
+- [x] Architecture diagram for Section B and slides (`docs/architecture.svg`, `docs/architecture.png`)
 
 ### Role 3: Coder & Sandbox
 

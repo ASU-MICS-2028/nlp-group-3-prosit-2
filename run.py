@@ -7,7 +7,7 @@
 Steps: chat (Requirements) -> design (Architect) -> approve -> build (Coder <-> Tester) -> start the API.
 In --golden mode the golden user turns answer the Requirements agent's questions, in order, and the
 summary and the spec are approved automatically. At the end it prints a summary per agent (steps, tokens,
-cost, time) and, for --golden, how the generated spec compares with the golden one.
+cost, time) and, for --golden, how the generated spec compares with the golden one (eval/spec_compare.py).
 
 Everything lands in workspace/<name>-<time>/: app/, tests/, steps.jsonl (every step) and state.json.
 The exit code is 0 only when the code passed the Coder's checks and every test passed.
@@ -15,7 +15,6 @@ The exit code is 0 only when the code passed the Coder's checks and every test p
 import argparse
 import asyncio
 import json
-import re
 import sys
 import time
 from collections import defaultdict
@@ -24,8 +23,10 @@ from pathlib import Path
 from agents import orchestrator as O
 from agents import requirements as req_agent
 from core.events import Event
+from core.sdk import MODEL
 from core.spec import Spec
 from core.state import Message, ProjectState
+from eval import spec_compare
 from server import stubs
 
 ROOT = Path(__file__).resolve().parent
@@ -139,21 +140,6 @@ async def run(first: str, answer, auto: bool, workspace: Path, serve: str = "che
 
 # ---------- the summary ----------
 
-def _pattern(path: str) -> str:
-    return re.sub(r"\{[^}]*\}", "{}", path.rstrip("/") or "/")
-
-
-def compare_specs(made: Spec, golden: Spec) -> dict:
-    """Endpoints and entities in both specs, and in only one. Paths compare without parameter names."""
-    ours = {f"{e.method} {_pattern(e.path)}" for e in made.endpoints}
-    ref = {f"{e.method} {_pattern(e.path)}" for e in golden.endpoints}
-    return {"endpoints_matched": sorted(ours & ref), "endpoints_extra": sorted(ours - ref),
-            "endpoints_missing": sorted(ref - ours),
-            "entities": {"generated": sorted(e.name for e in made.entities),
-                         "golden": sorted(e.name for e in golden.entities)},
-            "endpoint_recall": round(len(ours & ref) / len(ref), 2) if ref else 1.0}
-
-
 def report(state: ProjectState, seconds: float, golden: str | None) -> dict:
     per_agent = defaultdict(lambda: {"steps": 0, "tokens": 0, "cost_usd": 0.0, "seconds": 0.0})
     for entry in state.logs:
@@ -162,7 +148,8 @@ def report(state: ProjectState, seconds: float, golden: str | None) -> dict:
         a["tokens"] += entry.tokens
         a["cost_usd"] += entry.cost_usd
         a["seconds"] += entry.seconds
-    summary = {"build_ok": state.build_ok, "tests_ok": state.tests_ok, "test_summary": state.test_summary,
+    stub = all(e.tokens == 0 for e in state.logs)
+    summary = {"model": "stub" if stub else MODEL, "build_ok": state.build_ok, "tests_ok": state.tests_ok, "test_summary": state.test_summary,
                "known_failures": [f"{f.endpoint}: {f.test}" for f in state.failures],
                "fix_rounds": sum(l.action == "fix_round" for l in state.logs),
                "chat_turns": sum(m.role == "user" for m in state.chat),
@@ -171,7 +158,7 @@ def report(state: ProjectState, seconds: float, golden: str | None) -> dict:
                "cost_usd": round(sum(a["cost_usd"] for a in per_agent.values()), 4)}
     if golden and state.spec:
         ref = Spec.model_validate_json((ROOT / "golden" / golden / "spec.json").read_text())
-        summary["spec_vs_golden"] = compare_specs(state.spec, ref)
+        summary["spec_vs_golden"] = spec_compare.compare(state.spec, ref)
 
     print("\n" + "=" * 64)
     print(f"Build {'OK' if state.build_ok else 'FAILED'} | tests: {state.test_summary or 'not run'}"
@@ -183,13 +170,7 @@ def report(state: ProjectState, seconds: float, golden: str | None) -> dict:
     for f in summary["known_failures"]:
         print(f"  known failure: {f}")
     if "spec_vs_golden" in summary:
-        c = summary["spec_vs_golden"]
-        print(f"Spec vs golden: {len(c['endpoints_matched'])} endpoints match (recall {c['endpoint_recall']})"
-              f", entities {c['entities']['generated']} vs {c['entities']['golden']}")
-        for e in c["endpoints_missing"]:
-            print(f"  missing: {e}")
-        for e in c["endpoints_extra"]:
-            print(f"  extra:   {e}")
+        print("\nSpec vs golden (eval/spec_compare.py)\n" + spec_compare.show(summary["spec_vs_golden"]))
     print(f"Files: {state.workspace}")
     return summary
 
