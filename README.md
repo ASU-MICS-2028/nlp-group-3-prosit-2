@@ -401,8 +401,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Publish hardening: public traffic through the serve sandbox, real sign-in, per-user limits
 
 **Connect**
-- [ ] Gateway ↔ orchestrator (with Role 2)
-- [ ] Agree the event format (with Roles 2 and 3)
+- [x] Gateway ↔ orchestrator (with Role 2)
+- [x] Agree the event format (with Roles 2 and 3)
 
 **Evaluate**
 - [ ] Usability test with 3–5 non-developers (SUS scores)
@@ -446,15 +446,15 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Block outbound network for the serve sandbox
 - [x] Coder agent on the SDK: prompt with layout and SQLite conventions (`agents/coder.py`)
 - [x] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it
-- [ ] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
+- [x] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
 - [x] Custom tools: `run_checks`, `finish_build` (finish gate)
 - [x] Check the generated OpenAPI matches the spec (every spec method + path is served)
-- [ ] Change requests: when `state.change_request` is set, change only what it asks for and keep the rest of the working code. Open the files in `state.change_files` first: the user pointed at them. See [Change requests and `@` mentions](#change-requests-and--mentions).
+- [x] Change requests: when `state.change_request` is set, change only what it asks for and keep the rest of the working code. Open the files in `state.change_files` first: the user pointed at them. See [Change requests and `@` mentions](#change-requests-and--mentions).
 - [ ] Stretch: MCP server exposing the finished API's spec
 - [ ] Document security risks and mitigations
 
 **Connect**
-- [ ] Coder ⇄ Tester failure-report loop (with Role 4)
+- [x] Coder ⇄ Tester failure-report loop (with Role 4)
 - [x] Coder ↔ orchestrator (with Role 2): `CODER_AGENT=stub` still replays the golden code
 
 **Evaluate**
@@ -472,7 +472,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 **Build**
 - [x] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
 - [x] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
-- [ ] Agree the failure-report format with Role 3
+- [x] Agree the failure-report format with Role 3
 - [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
 - [ ] `search_patterns` tool for the Coder
 - [ ] Spec checking with Schemathesis
@@ -480,7 +480,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)
 
 **Connect**
-- [ ] Tester ⇄ Coder loop (with Role 3)
+- [x] Tester ⇄ Coder loop (with Role 3)
 
 **Evaluate**
 - [ ] Run the benchmark on the full system
@@ -525,10 +525,10 @@ Fill in the dates once the deadline is confirmed.
 - [ ] Confirm the deadline and fill in milestone dates
 - [ ] Day 1 agreements merged
 - [ ] Golden example updated to SQLite
-- [ ] Walking skeleton runs end to end
+- [x] Walking skeleton runs end to end
 - [ ] Each part runs alone on the golden example
-- [ ] Pairs connected
-- [ ] Full pipeline runs end to end
+- [x] Pairs connected
+- [x] Full pipeline runs end to end
 - [ ] Benchmark results ready
 - [ ] Usability test done
 - [ ] Security checklist done
