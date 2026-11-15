@@ -467,18 +467,18 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Check sandbox: no network, read-only code, throwaway DB, 120 s limit
 - [ ] Serve sandbox: read-only code, writable `data/`, localhost port, port allocation, idle stop
 - [ ] Block outbound network for the serve sandbox
-- [ ] Coder agent on the SDK: prompt with layout and SQLite conventions
-- [ ] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it
+- [x] Coder agent on the SDK: prompt with layout and SQLite conventions (`agents/coder.py`)
+- [x] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it
 - [ ] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
-- [ ] Custom tools: `run_checks`, `finish_build` (finish gate)
-- [ ] Check the generated OpenAPI matches the spec
+- [x] Custom tools: `run_checks`, `finish_build` (finish gate)
+- [x] Check the generated OpenAPI matches the spec (every spec method + path is served)
 - [ ] Change requests: when `state.change_request` is set, change only what it asks for and keep the rest of the working code. Open the files in `state.change_files` first: the user pointed at them. See [Change requests and `@` mentions](#change-requests-and--mentions).
 - [ ] Stretch: MCP server exposing the finished API's spec
 - [ ] Document security risks and mitigations
 
 **Connect**
 - [ ] Coder ⇄ Tester failure-report loop (with Role 4)
-- [ ] Coder ↔ orchestrator (with Role 2)
+- [x] Coder ↔ orchestrator (with Role 2): `CODER_AGENT=stub` still replays the golden code
 
 **Evaluate**
 - [ ] Security checklist per scenario

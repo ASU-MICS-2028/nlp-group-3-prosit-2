@@ -20,7 +20,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from agents import architect, requirements, single, tester
+from agents import architect, coder, requirements, single, tester
 from core.events import Emit, Event
 from core.spec import Spec
 from core.state import BuildResult, LogEntry, ProjectState
@@ -33,12 +33,13 @@ MAX_FIX_ROUNDS = int(os.getenv("MAX_FIX_ROUNDS", "1"))
 # ARCHITECT_AGENT=stub does the same for the architect; if unset, it follows REQUIREMENTS_AGENT.
 STUB_REQUIREMENTS = os.getenv("REQUIREMENTS_AGENT") == "stub"
 STUB_ARCHITECT = os.getenv("ARCHITECT_AGENT", os.getenv("REQUIREMENTS_AGENT")) == "stub"
+STUB_CODER = os.getenv("CODER_AGENT", os.getenv("REQUIREMENTS_AGENT")) == "stub"     # same rule for the coder
 STUB_TESTER = os.getenv("TESTER_AGENT", os.getenv("REQUIREMENTS_AGENT")) == "stub"   # same rule for the tester
 
 AGENTS = {
     "requirements": stubs.requirements if STUB_REQUIREMENTS else requirements.run,
     "architect": stubs.architect if STUB_ARCHITECT else architect.run,
-    "coder": stubs.coder,     # placeholder until Role 3's agents/coder.py lands
+    "coder": stubs.coder if STUB_CODER else coder.run,
     "tester": stubs.tester if STUB_TESTER else tester.run,
     "single": single.run,     # single-agent mode, for the comparison in the evaluation
 }
@@ -127,8 +128,9 @@ def plan_tasks(spec: Spec) -> list[str]:
     tasks = ["Set up the project: app/main.py, the SQLite database, and GET /health."]
     for entity in spec.entities:
         fields = ", ".join(f.name for f in entity.fields)
+        rel = f" Belongs to: {', '.join(entity.belongs_to)}." if entity.belongs_to else ""
         endpoints = ", ".join(f"{e.method} {e.path} ({e.access})" for e in spec.endpoints if e.entity == entity.name)
-        tasks.append(f"{entity.name}: table and schemas with {fields}. Endpoints: {endpoints or 'none'}.")
+        tasks.append(f"{entity.name}: table and schemas with {fields}.{rel} Endpoints: {endpoints or 'none'}.")
     others = [f"{e.method} {e.path} ({e.access})" for e in spec.endpoints if e.entity is None]
     if others:
         tasks.append("Other endpoints: " + ", ".join(others) + ".")

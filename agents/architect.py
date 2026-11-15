@@ -50,9 +50,12 @@ DESCRIPTION = "Submit the complete API spec. If it has problems, you get them ba
 def make_prompt(state: ProjectState) -> str:
     prompt = "<requirements>\n" + state.requirements.model_dump_json(indent=1) + "\n</requirements>\n"
     if state.change_request and state.spec:   # the user asked for a change on the approval screen
+        mentions = ""
+        if state.change_files:
+            mentions = "\nThe person specifically pointed at these files:\n" + "\n".join(f"- {f}" for f in state.change_files)
         prompt += ("\nThis is the current spec:\n<spec>\n" + state.spec.model_dump_json(indent=1) + "\n</spec>\n"
                    "\nThe person asked for this change:\n<change_request>\n" + state.change_request
-                   + "\n</change_request>\nSubmit the full updated spec.")
+                   + mentions + "\n</change_request>\nSubmit the full updated spec.")
     else:
         prompt += "\nDesign the API and submit the spec."
     return prompt
@@ -74,12 +77,18 @@ def check_spec(spec: Spec) -> list[str]:
         problems.append("Two entities have the same name.")
 
     for e in spec.entities:
-        field_names = [f.name for f in e.fields]
+        field_dict = {f.name: f for f in e.fields}
+        if "id" in field_dict:
+            problems.append(f"{e.name}: do not list an 'id' field; it is implicit.")
+
         for parent in e.belongs_to:
+            fk = f"{snake(parent)}_id"
             if parent not in entities:
                 problems.append(f"{e.name} belongs to {parent}, but there is no entity called {parent}.")
-            if f"{snake(parent)}_id" not in field_names:
-                problems.append(f"{e.name} belongs to {parent}, so it needs an int field {snake(parent)}_id.")
+            if fk not in field_dict:
+                problems.append(f"{e.name} belongs to {parent}, so it needs an int field {fk}.")
+            elif field_dict[fk].type != "int":
+                problems.append(f"{e.name}.{fk} must have type 'int'.")
 
     seen = set()
     for ep in spec.endpoints:
@@ -89,6 +98,8 @@ def check_spec(spec: Spec) -> list[str]:
         seen.add((ep.method, ep.path))
         if not ep.path.startswith("/"):
             problems.append(f"{label}: the path must start with /.")
+        if ep.method == "GET" and ep.request_fields:
+            problems.append(f"{label}: GET endpoints cannot accept request_fields (no body).")
         if ep.entity is None:
             continue
         if ep.entity not in entities:
