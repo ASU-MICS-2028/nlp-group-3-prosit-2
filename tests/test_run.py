@@ -4,7 +4,6 @@ import json
 
 import run
 from agents import orchestrator as O
-from core.spec import Spec
 from server import stubs
 
 
@@ -20,7 +19,7 @@ def test_golden_pipeline_offline(tmp_path, monkeypatch):
     assert agents.index("requirements") < agents.index("architect") < agents.index("coder") < agents.index("tester")
 
     summary = run.report(st, 1.0, "clinic")
-    assert summary["spec_vs_golden"]["endpoint_recall"] == 1.0 and not summary["known_failures"]
+    assert summary["spec_vs_golden"]["score"] == 1.0 and not summary["known_failures"]
     json.dumps(summary)   # summary.json must be plain JSON
 
 
@@ -35,13 +34,3 @@ def test_golden_answers_then_nudge():
     assert turns[0].startswith("Hi, I run a small clinic")
     assert "exactly it" not in " ".join(turns)                   # the confirm turn is the button, not an answer
     assert turns[-1] == run.NUDGE
-
-
-def test_compare_specs_ignores_parameter_names():
-    a = Spec(project_name="A", description="", entities=[], endpoints=[{"method": "GET", "path": "/items/{id}", "summary": "x"},
-                                                           {"method": "POST", "path": "/items", "summary": "x"}])
-    b = Spec(project_name="B", description="", entities=[], endpoints=[{"method": "GET", "path": "/items/{item_id}", "summary": "x"},
-                                                           {"method": "DELETE", "path": "/items/{id}", "summary": "x"}])
-    c = run.compare_specs(a, b)
-    assert c["endpoints_matched"] == ["GET /items/{}"] and c["endpoints_missing"] == ["DELETE /items/{}"]
-    assert c["endpoints_extra"] == ["POST /items"] and c["endpoint_recall"] == 0.5

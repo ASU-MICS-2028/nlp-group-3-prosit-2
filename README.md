@@ -346,6 +346,7 @@ python run.py --golden clinic --serve       # keep the API running at the end (C
 pytest                                      # offline: no API calls, agents use recorded replies
 pytest -m live                              # real API calls (costs money)
 python -m eval.benchmark --out results/run.csv
+python -m eval.spec_compare workspace/<run>/state.json golden/clinic/spec.json --csv results/specs.csv
 ```
 
 ### Signing in to Claude
@@ -430,7 +431,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Full pipeline run on the golden example (`python run.py --golden clinic`)
 
 **Evaluate**
-- [ ] Compare generated specs with reference specs
+- [x] Compare generated specs with reference specs (`eval/spec_compare.py`; `run.py --golden` prints it)
 - [ ] Hand logs to Role 4
 - [ ] Architecture diagram for Section B and slides
 
