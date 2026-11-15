@@ -49,7 +49,6 @@ async def requirements(state: ProjectState, emit: Emit) -> ProjectState:
 async def architect(state: ProjectState, emit: Emit) -> ProjectState:
     if state.change_request:
         await _step(state, emit, "architect", "change", f"Change noted (stub keeps the golden spec): {state.change_request}")
-        state.change_request = None
     state.spec = Spec.model_validate_json((GOLDEN / "spec.json").read_text())
     state.spec_approved = False
     await _step(state, emit, "architect", "spec", f"{len(state.spec.endpoints)} endpoints")
