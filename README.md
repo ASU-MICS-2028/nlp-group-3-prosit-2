@@ -158,6 +158,31 @@ options = ClaudeAgentOptions(
 )
 ```
 
+### Pattern library (RAG)
+
+The Coder does not have to remember how we build APIs: it looks it up. `search_patterns("unique email 409")` returns the best matching sections of a small library, code included, and the Coder writes from them.
+
+| Step | What happens | Where |
+| --- | --- | --- |
+| Library | 43 patterns we wrote for our own stack (layout, `sqlite3`, auth headers, CRUD, business rules, fixes for common errors), plus 21 pages of the FastAPI docs | `rag/patterns/*.md`, `rag/docs/*.md` |
+| Chunk | Each file is cut at its headings, never inside a code block: one chunk is one idea with its code (281 chunks) | `sections()`, `chunk_file()` |
+| Embed | Each chunk becomes a TF-IDF vector: one weight per word, higher when the word is frequent in the chunk and rare in the library. Words are stemmed; code names are kept whole and also split (`check_same_thread`) | `tokens()`, `embed()` |
+| Retrieve | The query is embedded the same way and chunks are ranked by cosine similarity. Our patterns get a small boost over the general docs, and one docs page can take only one place. The top 3 go back to the model | `search()` |
+
+```python
+import rag
+
+tools = {**rag.tools(), "run_checks": ..., "finish_build": ...}   # {} when RAG=off
+SYSTEM = CODER_PROMPT + "\n" + rag.PROMPT                         # tells the Coder when to search; "" when RAG=off
+```
+
+```bash
+python -m rag "expected 409 got 500 IntegrityError"   # try a search
+python -m rag.fetch_docs                              # refresh the FastAPI pages (the only step that needs the internet)
+```
+
+The patterns are tested, not just written: `tests/test_rag.py` builds the example app the patterns describe and runs it with the Tester's own fixture, and checks 48 realistic queries (including failure reports and tracebacks) for the right section in the top 3. The examples deliberately avoid the clinic, so the library never contains the answer to the golden example. `RAG=off` removes the tool for the "no RAG" comparison.
+
 ### Key decisions
 
 | Decision | Why |
@@ -167,6 +192,7 @@ options = ClaudeAgentOptions(
 | Fixed generated stack: FastAPI + stdlib `sqlite3` | Fewer choices make the coder more reliable. FastAPI gives Swagger for free. `sqlite3` needs no extra package, so the sandbox still needs no network. |
 | Read-only code, no-network check sandbox | Generated code can't call out, modify itself at runtime, or touch the host. |
 | SQLite on a separate writable volume | Data survives restarts, and `data/` is the only writable place. |
+| TF-IDF vectors for RAG, not a neural embedding model | The library is small and full of exact names (`HTTPException`, `lastrowid`, `409`) that word matching finds reliably. No model download, API key or network; the same query always gives the same result, so retrieval can be unit-tested. |
 | Tests written from the spec; Coder can't edit them | Stops the Coder from "passing" by changing the tests. |
 | Finish gate in code, not just in the prompt | The model can't declare itself done without passing checks. |
 | Web app only, no desktop version | One codebase that runs locally now and can be hosted online later without changes to the UI. |
@@ -282,7 +308,7 @@ These are what let four people build separately and still fit together. **Changi
 ├── ui/                      # Mesora Blocks frontend (static), served by the gateway
 ├── docs/screenshots/        # images used in this README
 ├── sandbox/                 # Dockerfile + check.py
-├── rag/                     # pattern library, docs index, search tool (Role 4)
+├── rag/                     # RAG (Role 4): patterns/ (ours), docs/ (FastAPI), library.py (chunk, embed, search, tool)
 ├── golden/clinic/           # golden example
 ├── benchmark/               # scenarios + hidden tests (Role 4)
 ├── eval/                    # benchmark runner, results to CSV
@@ -470,8 +496,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
 - [x] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
 - [ ] Agree the failure-report format with Role 3
-- [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
-- [ ] `search_patterns` tool for the Coder
+- [x] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded (`rag/`)
+- [x] `search_patterns` tool for the Coder (`rag.tools()`; Role 3 adds it to the Coder's tools)
 - [ ] Spec checking with Schemathesis
 - [ ] Evaluation script that saves results to CSV
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)
