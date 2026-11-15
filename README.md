@@ -79,6 +79,10 @@ The project menu at the top switches between generated projects, and **Download 
 
 ## Architecture
 
+![How Mesora Blocks turns a description into a running API](docs/architecture.png)
+
+For slides and the report: [`docs/architecture.svg`](docs/architecture.svg) (scales to any size) or [`docs/architecture.png`](docs/architecture.png) (3200×1800, for Google Slides). The overview below includes the Docker sandbox, which is still being built (Role 3).
+
 ```mermaid
 flowchart LR
     U["User (browser)"] -->|"HTTP + live events"| G["Gateway (FastAPI)"]
@@ -433,7 +437,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 **Evaluate**
 - [x] Compare generated specs with reference specs (`eval/spec_compare.py`; `run.py --golden` prints it)
 - [x] Hand logs to Role 4 (`python -m eval.export_logs` → `results/runs.csv`, `results/steps.csv`; columns in `eval/README.md`)
-- [ ] Architecture diagram for Section B and slides
+- [x] Architecture diagram for Section B and slides (`docs/architecture.svg`, `docs/architecture.png`)
 
 ### Role 3: Coder & Sandbox
 
