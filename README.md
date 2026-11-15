@@ -117,7 +117,7 @@ flowchart LR
 6. **Fix.** The failure report sends the Coder back into its loop (`MAX_FIX_ROUNDS`, default 1). The Coder cannot edit `tests/`. If a fix round breaks the build, the last working code is restored and the known failures are reported honestly.
 7. **Deliver.** The orchestrator starts the API in the serve sandbox and returns a `BuildResult`: base URL, docs URL, endpoint list, test summary and any known failures.
 
-Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). Today the gateway sends them, joined into one message, when the running job ends: before a spec they go to the Requirements agent, after it they are a change request. Routing them sooner, after the current agent step, is Role 2's.
+Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). The orchestrator looks at the queue between agent steps, whenever more work would follow: before the Tester, and before each fix round. If something is waiting, it stops the build and sends the messages (joined into one, `@` mentions included) to the Architect as a change request; the revised spec goes back to the approval screen. A build that already passed its tests is always delivered first, and a message typed during its last step is sent as a change request right after. Any message counts as a change request, including a question or a thank-you; telling them apart is a possible improvement. Outside a build, queued messages are sent when the running job ends: before a spec they go to the Requirements agent, after it they are a change request.
 
 ### Change requests and `@` mentions
 
@@ -421,7 +421,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Stop rules: max fix rounds, restore last working code
 - [x] Architect agent on the SDK with `submit_spec` validating against the schema (`agents/architect.py`)
 - [x] Split the spec into build tasks for the Coder (`plan_tasks()`)
-- [ ] Route change requests (from the approval screen and mid-build messages) back to the Architect: approval screen done; mid-build messages not yet
+- [x] Route change requests (from the approval screen and mid-build messages) back to the Architect (`orchestrator.build(check_queue=...)`, `redesign()`)
 - [x] Single-agent mode (one SDK session does everything) for comparison (`agents/single.py`, `orchestrator.build_single()`)
 - [x] Write every step to a JSONL log (`<project>/steps.jsonl`)
 
