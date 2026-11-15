@@ -147,7 +147,7 @@ async def run(state: ProjectState, emit: Emit, runner=run_agent) -> ProjectState
     action = "change" if state.change_request else "spec"
     state.spec = spec
     state.spec_approved = False     # a new or changed spec always needs the user's approval
-    state.change_request = None
+    # change_request stays set: the Coder needs the user's words too. build() clears it once applied.
     state.logs.append(LogEntry(agent="architect", action=action, seconds=seconds,
                                tokens=usage.get("tokens", 0), cost_usd=usage.get("cost_usd", 0.0),
                                detail=f"{len(spec.entities)} entities, {len(spec.endpoints)} endpoints"))

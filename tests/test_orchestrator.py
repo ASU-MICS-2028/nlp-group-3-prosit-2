@@ -141,3 +141,28 @@ def test_chat_designs_only_after_the_user_confirms(monkeypatch):
     monkeypatch.setitem(O.AGENTS, "requirements", confirmed)
     st = asyncio.run(O.chat(ProjectState(), emit))
     assert calls == ["architect"] and st.spec == SPEC and not st.spec_approved
+
+
+def test_change_request_reaches_the_coder_and_is_cleared_after_the_build(tmp_path, monkeypatch):
+    fake_agents(monkeypatch, tests_pass=[True])
+    seen = []
+    coder = O.AGENTS["coder"]
+
+    async def watching_coder(state, emit):
+        seen.append((state.change_request, list(state.change_files)))
+        return await coder(state, emit)
+
+    monkeypatch.setitem(O.AGENTS, "coder", watching_coder)
+    st = approved(tmp_path)
+    st.change_request, st.change_files = "Add notes to Patient", ["app/main.py"]
+    st = asyncio.run(O.build(st, emit))
+    assert seen == [("Add notes to Patient", ["app/main.py"])]    # the Coder got the user's words
+    assert st.change_request is None and st.change_files == []    # applied, so the next build starts clean
+
+
+def test_change_request_survives_a_failed_build(tmp_path, monkeypatch):
+    fake_agents(monkeypatch, tests_pass=[], coder_breaks=(0,))
+    st = approved(tmp_path)
+    st.change_request = "Add notes to Patient"
+    st = asyncio.run(O.build(st, emit))
+    assert not st.build_ok and st.change_request == "Add notes to Patient"   # a rebuild still knows the change

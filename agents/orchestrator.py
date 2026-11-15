@@ -104,6 +104,8 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
     # The BuildResult: what the user gets. The gateway adds base_url and docs_url when it starts the API.
     state.result = BuildResult(endpoints=[f"{e.method} {e.path}" for e in state.spec.endpoints],
                                test_summary=state.test_summary, known_failures=state.failures)
+    if state.build_ok:   # the change request is now in the code; the next build starts clean
+        state.change_request, state.change_files = None, []
     write_log(state)
     await emit(Event(type="result", agent="orchestrator", detail="Build finished",
                      data={"build_ok": state.build_ok, "tests_ok": state.tests_ok}))
