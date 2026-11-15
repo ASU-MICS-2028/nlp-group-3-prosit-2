@@ -37,8 +37,8 @@ from core.events import Event
 from core.state import Message, ProjectState
 from agents import orchestrator
 from agents import requirements as req_agent
-# Placeholder until the serve sandbox (core/sandbox) lands. Which agents run is set in agents/orchestrator.py.
-from server.stubs import serve, stop
+# Generated APIs run in the serve sandbox (SANDBOX=docker | local). Which agents run is set in agents/orchestrator.py.
+from core.sandbox import cleanup, serve, stop
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "ui" / "static"
@@ -176,6 +176,7 @@ def _job(s: Session, label: str, fn) -> dict:
 
 @asynccontextmanager
 async def lifespan(app):
+    cleanup()                 # containers left behind by a gateway that crashed
     for sub in _registry():   # published APIs come back after a restart
         if sub in LIVE:
             continue

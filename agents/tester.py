@@ -19,16 +19,14 @@ with no model call: the tests stay the same, so the Coder cannot pass by getting
 
 Agent format (shared contract): async def run(state, emit) -> state
 """
-import asyncio
-import os
 import re
 import shutil
-import sys
 import time
 from pathlib import Path
 
 from pydantic import ValidationError
 
+from core import sandbox
 from core.events import Emit, Event
 from core.sdk import run_agent
 from core.spec import Failure, Spec
@@ -170,24 +168,19 @@ RESULT_RE = re.compile(r"^(PASSED|FAILED|ERROR|SKIPPED) (\S+?)::(\S+)(?: - (.*))
 
 
 async def run_pytest(ws: Path) -> dict:
-    """Run pytest in the project folder. Returns {"ok", "summary", "results", "output"}.
-    ponytail: a plain local process, not isolated. Role 3's check sandbox replaces this call."""
-    proc = await asyncio.create_subprocess_exec(
-        sys.executable, "-m", "pytest", "-q", "-rA", "--tb=short", "-p", "no:cacheprovider",
-        "tests",
-        cwd=ws, env={**os.environ, "COLUMNS": "250"},   # wide, so pytest does not cut the failure reasons short
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-    try:
-        output = (await asyncio.wait_for(proc.communicate(), TEST_TIMEOUT))[0].decode(errors="replace")
-    except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
+    """Run pytest in the project folder, in the check sandbox (no network, code read-only).
+    Returns {"ok", "summary", "results", "output"}."""
+    run = await sandbox.run(ws, ["python", "-m", "pytest", "-q", "-rA", "--tb=short", "-p", "no:cacheprovider", "tests"],
+                            env={"COLUMNS": "250"},   # wide, so pytest does not cut the failure reasons short
+                            timeout=TEST_TIMEOUT)
+    if run.timed_out:
         return {"ok": False, "summary": f"timed out after {TEST_TIMEOUT}s", "results": [],
                 "output": f"The tests did not finish within {TEST_TIMEOUT} seconds."}
+    output = run.output
     results = [{"file": "tests/" + Path(file).name, "name": name, "outcome": outcome.lower(), "message": message or ""}
                for outcome, file, name, message in RESULT_RE.findall(output)]
     summary = output.strip().splitlines()[-1].strip("= ") if output.strip() else "no output"
-    return {"ok": proc.returncode == 0, "summary": summary, "results": results, "output": output}
+    return {"ok": run.code == 0, "summary": summary, "results": results, "output": output}
 
 
 def failed(run: dict) -> dict[str, str]:
