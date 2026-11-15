@@ -62,7 +62,6 @@ class Session:
         self.root = WORKSPACES / sid
         self.state = ProjectState()
         self.revisions: list[str] = []      # change requests after the first spec
-        self.rounds: list[dict] = []        # one per change request: the version it replaced, for the chat timeline
         self.queued: list[str] = []         # messages sent while a job was running; sent when it ends
         self.busy: Optional[str] = None     # label of the running job
         self.error: Optional[str] = None
@@ -84,22 +83,8 @@ SESSIONS: dict[str, Session] = {}
 def sess(request: Request) -> Session:
     sid = request.state.sid
     if sid not in SESSIONS:
-        SESSIONS[sid] = s = Session(sid)
-        _resume(s)
+        SESSIONS[sid] = Session(sid)
     return SESSIONS[sid]
-
-
-def _resume(s: Session) -> None:
-    """A browser we know, after a gateway restart (or a deploy): reopen its most recent project
-    instead of showing an empty one, so the next message continues it."""
-    saved = sorted(s.root.glob("*/state.json"), key=lambda f: f.stat().st_mtime)
-    if saved:
-        _load(s, json.loads(saved[-1].read_text()))
-
-
-def _load(s: Session, data: dict) -> None:
-    s.state = ProjectState.model_validate(data["state"])
-    s.revisions, s.rounds, s.error, s.queued = data.get("revisions", []), data.get("rounds", []), None, []
 
 
 def _slug(name: str) -> str:
@@ -119,7 +104,7 @@ def _save(s: Session) -> None:
     if d is None:
         return
     d.mkdir(parents=True, exist_ok=True)
-    (d / "state.json").write_text(json.dumps({"state": s.state.model_dump(mode="json"), "revisions": s.revisions, "rounds": s.rounds}, indent=1))
+    (d / "state.json").write_text(json.dumps({"state": s.state.model_dump(mode="json"), "revisions": s.revisions}, indent=1))
 
 
 def _stop_server(s: Session) -> None:
@@ -141,7 +126,6 @@ def snapshot(s: Session) -> dict:
     return {
         "state": s.state.model_dump(mode="json"),
         "revisions": s.revisions,
-        "rounds": s.rounds,
         "queued": s.queued,
         "phase": _phase(s),
         "busy": s.busy,
@@ -283,15 +267,10 @@ async def _design(s: Session) -> None:
 
 async def _build(s: Session) -> None:
     _stop_server(s)
-    d = _project_dir(s) or s.root / _slug(s.state.requirements.project_name)   # solo: no spec yet
+    d = _project_dir(s)
     d.mkdir(parents=True, exist_ok=True)
     s.state.workspace = str(d)
-    s.state = await (orchestrator.build_solo if orchestrator.solo_mode() else orchestrator.build)(s.state, s.emit)
-
-
-async def _after_requirements(s: Session) -> None:
-    """Requirements confirmed: the team designs (then waits for approval); solo builds straight away."""
-    await (_build(s) if orchestrator.solo_mode() else _design(s))
+    s.state = await orchestrator.build(s.state, s.emit)
 
 
 MENTION_RE = re.compile(r"(?:^|\s)@([\w./-]+)")
@@ -316,14 +295,12 @@ def _send_queued(s: Session) -> None:
 
 def _dispatch(s: Session, text: str) -> dict:
     """Before a spec, a message goes to the requirements agent; after, it's a change request."""
-    if s.state.spec or (orchestrator.solo_mode() and s.state.requirements):
+    if s.state.spec:
         return _change(s, text)
 
     async def work():
         s.state.chat.append(Message(role="user", content=text))
         s.state = await orchestrator.chat(s.state, s.emit)
-        if orchestrator.solo_mode() and s.state.requirements is not None:   # typed "looks right"
-            await _build(s)
 
     return _job(s, "Thinking...", work)
 
@@ -351,7 +328,7 @@ async def confirm_requirements(request: Request):
     async def work():
         s.state.chat.append(Message(role="user", content="Looks right."))
         s.state = await req_agent.confirm(s.state, s.emit)
-        await _after_requirements(s)
+        await _design(s)
 
     return _job(s, "Designing your API...", work)
 
@@ -368,15 +345,10 @@ def _change(s: Session, text: str) -> dict:
     """Change request. @mentioned files go to state.change_files for the Architect and Coder."""
     async def work():
         s.revisions.append(text)
-        st = s.state   # keep the version this request replaces, so the chat shows it in place
-        s.rounds.append({"request": text, "spec": st.spec.model_dump(mode="json") if st.spec else None,
-                         "log_end": len(st.logs), "build": {k: getattr(st, k) for k in (
-                             "build_ok", "tests_ok", "test_summary", "test_results", "test_report")}
-                         if st.spec_approved else None})
         s.state.change_request, s.state.change_files = text, mentions(s, text)
-        await (_build(s) if orchestrator.solo_mode() else _design(s))
+        await _design(s)
 
-    return _job(s, "Updating your API..." if orchestrator.solo_mode() else "Updating the design...", work)
+    return _job(s, "Updating the design...", work)
 
 
 @app.post("/api/spec/approve")
@@ -430,7 +402,7 @@ def open_project(body: Slug, request: Request):
         raise HTTPException(409, f"Busy: {s.busy}")
     _stop_server(s)
     data = json.loads(f.read_text())
-    _load(s, data)
+    s.state, s.revisions, s.error, s.queued = ProjectState.model_validate(data["state"]), data.get("revisions", []), None, []
     return snapshot(s)
 
 
@@ -440,7 +412,7 @@ def new_project(request: Request):
     if s.busy:
         raise HTTPException(409, f"Busy: {s.busy}")
     _stop_server(s)
-    s.state, s.revisions, s.rounds, s.error, s.queued = ProjectState(), [], [], None, []
+    s.state, s.revisions, s.error, s.queued = ProjectState(), [], None, []
     return snapshot(s)
 
 
