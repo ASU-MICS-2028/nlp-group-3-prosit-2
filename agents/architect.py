@@ -49,7 +49,7 @@ DESCRIPTION = "Submit the complete API spec. If it has problems, you get them ba
 
 def make_prompt(state: ProjectState) -> str:
     prompt = "<requirements>\n" + state.requirements.model_dump_json(indent=1) + "\n</requirements>\n"
-    if state.change_request and state.spec:   # the user asked for a change on the approval screen
+    if state.change_request and state.spec:   # the user asked for a change (approval screen or mid-build)
         mentions = ""
         if state.change_files:
             mentions = "\nThe person specifically pointed at these files:\n" + "\n".join(f"- {f}" for f in state.change_files)
