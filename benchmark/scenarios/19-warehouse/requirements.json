@@ -1,0 +1,28 @@
+{
+  "project_name": "Warehouse Stock",
+  "description": "A distributor tracks how much of each item is in each of its warehouses.",
+  "users": [
+    "warehouse staff",
+    "the stock manager"
+  ],
+  "data": [
+    "warehouses with a name (unique)",
+    "items with a stock code (unique) and a name",
+    "stock movements: an item received into a warehouse, shipped out of it, or transferred to another warehouse, with a quantity"
+  ],
+  "actions": [
+    "the manager adds warehouses and items",
+    "staff see the warehouses and items",
+    "staff record goods received",
+    "staff record goods shipped",
+    "staff transfer goods between warehouses",
+    "staff see what a warehouse holds",
+    "staff see how much of an item there is and where",
+    "the manager sees all movements"
+  ],
+  "rules": [
+    "nothing can be shipped or transferred that the warehouse does not hold",
+    "a transfer needs a different destination warehouse",
+    "quantities are at least one"
+  ]
+}

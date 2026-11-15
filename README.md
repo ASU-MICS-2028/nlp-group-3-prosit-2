@@ -160,7 +160,7 @@ options = ClaudeAgentOptions(
 
 ### Benchmark scenarios and hidden tests
 
-`benchmark/scenarios/` holds 15 small projects, from a one-table notebook to bookings with overlap rules: clinic, notes, to-do, library, shop, courses, expenses, events, helpdesk, restaurant, car rentals, polls, savings wallet, school grades, pet adoption.
+`benchmark/scenarios/` holds 20 small projects. Fifteen are everyday ones, from a one-table notebook to bookings with overlap rules: clinic, notes, to-do, library, shop, courses, expenses, events, helpdesk, restaurant, car rentals, polls, savings wallet, school grades, pet adoption. Five are harder on purpose, with rules that interact: guest house bookings, multi-item orders, staff leave, warehouse stock, project tasks.
 
 | File | What it is |
 | --- | --- |
@@ -179,6 +179,20 @@ verdict = asyncio.run(benchmark.judge(scenario, workspace / "app"))   # {"passed
 ```
 
 `tests/test_benchmark.py` checks every scenario offline: the spec passes the Architect's own checks, the examples match it, the rule tests only call endpoints the spec has, and on the golden clinic the hidden tests pass and catch six planted bugs.
+
+### Running the evaluation
+
+`eval/run.py` builds every scenario from its reference spec, judges the result with the hidden tests, and adds one row per build to `eval/results/results.csv`. **It makes real model calls.**
+
+```bash
+python -m eval.run --label team                       # Coder -> Tester -> fix rounds, all scenarios
+python -m eval.run --label no-tester --system coder   # the Coder alone
+RAG=off python -m eval.run --label no-rag             # the team without search_patterns
+LLM_MODEL=claude-sonnet-5-5 python -m eval.run --label sonnet
+python -m eval.run --summary                          # print the table, run nothing
+```
+
+Each row has the hidden-test score, whether every hidden test passed, the Tester's verdict, the number of fix rounds, and tokens, cost and time. A row is written as soon as its build finishes, and running a label again skips what is already in the file, so a run can be stopped and continued. `--repeat 3` builds each scenario three times, because the same model does not write the same code twice.
 
 ### Key decisions
 
@@ -307,7 +321,7 @@ These are what let four people build separately and still fit together. **Changi
 ├── rag/                     # pattern library, docs index, search tool (Role 4)
 ├── golden/clinic/           # golden example
 ├── benchmark/               # Role 4: scenarios/ (requirements, reference spec, hidden rule tests), generic hidden tests, judge()
-├── eval/                    # benchmark runner, results to CSV
+├── eval/                    # Role 4: run.py builds every scenario, judges it, writes results/results.csv
 ├── tests/                   # tests for our own code
 ├── workspace/               # generated projects (gitignored)
 ├── run.py                   # CLI entry point
@@ -485,7 +499,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Set up**
 - [ ] Write the golden tests (against a throwaway SQLite DB)
-- [x] Write 15–30 benchmark scenarios (15, in `benchmark/scenarios/`)
+- [x] Write 15–30 benchmark scenarios (20, in `benchmark/scenarios/`)
 - [x] Write hidden tests for each scenario (generic tests from the spec + rule tests per scenario; `benchmark.judge()`)
 
 **Build**
@@ -495,7 +509,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
 - [ ] `search_patterns` tool for the Coder
 - [ ] Spec checking with Schemathesis
-- [ ] Evaluation script that saves results to CSV
+- [x] Evaluation script that saves results to CSV (`python -m eval.run`)
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)
 
 **Connect**

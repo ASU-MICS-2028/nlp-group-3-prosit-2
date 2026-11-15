@@ -1,0 +1,62 @@
+{
+  "project_name": "Wholesale Orders",
+  "description": "Customers build an order from several products, then pay for it or cancel it.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Product",
+      "description": "Something for sale.",
+      "fields": [
+        {"name": "name", "type": "str", "unique": true},
+        {"name": "price", "type": "float"},
+        {"name": "stock", "type": "int"}
+      ]
+    },
+    {
+      "name": "Order",
+      "description": "A customer's order.",
+      "fields": [
+        {"name": "user_id", "type": "int", "read_only": true, "description": "the customer, from the X-User-Id header"},
+        {"name": "status", "type": "str", "read_only": true, "description": "open, paid or cancelled"},
+        {"name": "total", "type": "float", "read_only": true, "description": "sum of quantity x unit_price of its items"}
+      ]
+    },
+    {
+      "name": "OrderItem",
+      "description": "One product in an order.",
+      "belongs_to": ["Order", "Product"],
+      "fields": [
+        {"name": "order_id", "type": "int"},
+        {"name": "product_id", "type": "int"},
+        {"name": "quantity", "type": "int"},
+        {"name": "unit_price", "type": "float", "read_only": true, "description": "the product's price when the item was added"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/products", "summary": "Add a product", "entity": "Product", "access": "admin", "request_fields": ["name", "price", "stock"], "status_code": 201},
+    {"method": "GET", "path": "/products", "summary": "List products", "entity": "Product", "access": "public", "status_code": 200},
+    {"method": "GET", "path": "/products/{id}", "summary": "Get a product", "entity": "Product", "access": "public", "status_code": 200},
+    {"method": "POST", "path": "/orders", "summary": "Start an empty order", "entity": "Order", "access": "user", "status_code": 201},
+    {"method": "GET", "path": "/orders", "summary": "List the caller's orders (all orders for an admin)", "entity": "Order", "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/orders/{id}", "summary": "Get an order", "entity": "Order", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/items", "summary": "Add a product to an order", "entity": "OrderItem", "access": "user", "request_fields": ["order_id", "product_id", "quantity"], "status_code": 201},
+    {"method": "DELETE", "path": "/items/{id}", "summary": "Remove an item from its order", "entity": "OrderItem", "access": "user", "status_code": 204},
+    {"method": "GET", "path": "/orders/{id}/items", "summary": "List the items of an order", "entity": "OrderItem", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/orders/{id}/pay", "summary": "Pay for an order", "entity": "Order", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/orders/{id}/cancel", "summary": "Cancel an order", "entity": "Order", "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "user_id is set from the X-User-Id header when the order is created. A new order has status open and total 0.",
+    "A user can get, pay and cancel only their own orders, and list, add and remove items only on their own orders; another user's order returns 403. An admin can access every order. GET /orders returns only the caller's own orders for a user, and every order for an admin.",
+    "quantity must be at least 1; reject with 422.",
+    "Items can be added and removed only while the order has status open; otherwise 409.",
+    "Adding more than the product's stock returns 409 and changes nothing. Adding an item reduces the product's stock by the quantity, and unit_price is the product's price at that moment.",
+    "A product can be in an order only once; adding the same product to the same order again returns 409.",
+    "Removing an item adds its quantity back to the product's stock.",
+    "An order's total is always the sum of quantity x unit_price over its items.",
+    "pay moves an order from open to paid; paying an order that has no items returns 409. cancel moves an order from open or paid to cancelled and adds the quantity of every item back to stock. Any other status change returns 409.",
+    "GET /orders/{id}/items returns that order's items; an unknown order returns 404.",
+    "order_id and product_id must refer to existing records; otherwise 404."
+  ]
+}

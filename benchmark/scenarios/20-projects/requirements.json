@@ -1,0 +1,30 @@
+{
+  "project_name": "Project Tasks",
+  "description": "A team plans projects as tasks, where some tasks must wait for others.",
+  "users": [
+    "team members",
+    "the team lead"
+  ],
+  "data": [
+    "projects with a name (unique) and whether the project is archived",
+    "tasks of a project with a title, a status (to do, doing or done) and optionally the task that must be finished first"
+  ],
+  "actions": [
+    "team members create projects",
+    "team members see projects",
+    "team members add tasks to a project",
+    "team members see tasks",
+    "team members start and finish tasks",
+    "team members delete a task",
+    "team members see a project's progress",
+    "the team lead archives a finished project"
+  ],
+  "rules": [
+    "a task cannot be started until the task it waits for is done",
+    "a task goes from to do to doing to done",
+    "a task that another task waits for cannot be deleted",
+    "a task can only wait for a task in the same project",
+    "a project can be archived only when it has tasks and all of them are done",
+    "no tasks can be added to an archived project"
+  ]
+}

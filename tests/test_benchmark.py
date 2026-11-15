@@ -17,7 +17,7 @@ by_name = pytest.mark.parametrize("scenario", ALL, ids=[s.name for s in ALL])
 
 
 def test_there_are_enough_scenarios():
-    assert 15 <= len(ALL) <= 30
+    assert 20 <= len(ALL) <= 30
     assert len({s.spec.project_name for s in ALL}) == len(ALL)
 
 
