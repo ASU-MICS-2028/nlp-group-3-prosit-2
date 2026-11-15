@@ -158,6 +158,21 @@ options = ClaudeAgentOptions(
 )
 ```
 
+### Schema check (Schemathesis)
+
+The Tester's tests try the inputs a person would think of. `agents/schema_check.py` does the opposite: Schemathesis reads the built API's own OpenAPI document and generates many requests for every endpoint (missing fields, wrong types, empty strings, huge numbers). One property must hold for all of them: **the API always answers and never crashes**. A refusal (401, 404, 409, 422) is a correct answer; a 500 or an uncaught exception is a failure.
+
+```python
+result = await schema_check.check(Path(workspace) / "app")
+result["summary"]   # "6 of 13 endpoints crashed on generated input"
+result["crashes"]   # [{"endpoint": "GET /doctors/{id}", "request": "GET /doctors/9223372036854775808", "error": "OverflowError: ..."}]
+schema_check.as_failures(result)   # the same crashes as Failure objects, for the Coder
+```
+
+No model is involved, so it is free to run, and the same app always gives the same result. For each endpoint that crashes, the smallest request that still crashes it is reported. It is a separate check for now: nothing in the build calls it.
+
+First finding: every API the Coder has built so far crashes when an id is larger than SQLite can store (`9223372036854775808`), on about half of its endpoints. No hand-written or model-written test had tried that. The fix belongs in the Coder's conventions (limit ids, or answer 404).
+
 ### Key decisions
 
 | Decision | Why |
@@ -475,7 +490,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Agree the failure-report format with Role 3
 - [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
 - [ ] `search_patterns` tool for the Coder
-- [ ] Spec checking with Schemathesis
+- [x] Spec checking with Schemathesis (`agents/schema_check.py`; a separate check, not yet part of the build)
 - [ ] Evaluation script that saves results to CSV
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)
 
