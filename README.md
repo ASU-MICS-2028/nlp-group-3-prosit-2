@@ -128,7 +128,7 @@ After the spec exists, everything the user types is a **change request**. The us
 | `state.change_request` | gateway | The user's words, unchanged (mentions included) |
 | `state.change_files` | gateway | The `@`-mentioned paths that really exist in the workspace, in order, no duplicates (e.g. `["app/main.py"]`). Unknown names and email addresses are ignored. |
 
-The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). A new change request overwrites both fields.
+The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). Both fields stay set until a build that passes the Coder's checks, so the Coder (and its fix rounds) see the user's words; then the orchestrator clears them. A new change request overwrites both fields.
 
 ### Inside each agent
 
@@ -332,10 +332,13 @@ PUBLISH_URL=http://{sub}.localhost:8000   # where published APIs live; hosted: h
 
 ```bash
 python -m server                            # web app at http://localhost:8000 (stub agents for now)
-python run.py --golden clinic               # full pipeline on the golden example
-python run.py "I run a small clinic..."     # full pipeline from a prompt, in the terminal
-python run.py --stop-all                    # stop every running generated API
+python run.py --golden clinic               # full pipeline on the golden example (real agents)
+python run.py --golden clinic --stub        # the same, offline: stub agents replay the golden example
+python run.py "I run a small clinic..."     # full pipeline from a prompt, you answer in the terminal
+python run.py --golden clinic --serve       # keep the API running at the end (Ctrl+C stops it)
 ```
+
+`--golden` answers the Requirements agent with the golden user turns, in order, and approves the summary and the spec. It ends with a summary per agent (steps, tokens, cost, seconds) and the generated spec compared with the golden one. Everything is saved in `workspace/<name>-<time>/`: `app/`, `tests/`, `steps.jsonl`, `state.json` and `summary.json`. Exit code 0 only when the checks and all tests pass.
 
 ### Test
 
@@ -423,8 +426,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Write every step to a JSONL log (`<project>/steps.jsonl`)
 
 **Connect**
-- [ ] Wire all agents (with Roles 1 and 3)
-- [ ] Full pipeline run on the golden example
+- [x] Wire all agents (with Roles 1 and 3): requirements → architect → coder ⇄ tester; change requests reach the Coder
+- [x] Full pipeline run on the golden example (`python run.py --golden clinic`)
 
 **Evaluate**
 - [ ] Compare generated specs with reference specs
