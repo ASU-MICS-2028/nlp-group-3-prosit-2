@@ -23,6 +23,7 @@ from pathlib import Path
 from agents import orchestrator as O
 from agents import requirements as req_agent
 from core.events import Event
+from core.sdk import MODEL
 from core.spec import Spec
 from core.state import Message, ProjectState
 from eval import spec_compare
@@ -147,7 +148,8 @@ def report(state: ProjectState, seconds: float, golden: str | None) -> dict:
         a["tokens"] += entry.tokens
         a["cost_usd"] += entry.cost_usd
         a["seconds"] += entry.seconds
-    summary = {"build_ok": state.build_ok, "tests_ok": state.tests_ok, "test_summary": state.test_summary,
+    stub = all(e.tokens == 0 for e in state.logs)
+    summary = {"model": "stub" if stub else MODEL, "build_ok": state.build_ok, "tests_ok": state.tests_ok, "test_summary": state.test_summary,
                "known_failures": [f"{f.endpoint}: {f.test}" for f in state.failures],
                "fix_rounds": sum(l.action == "fix_round" for l in state.logs),
                "chat_turns": sum(m.role == "user" for m in state.chat),

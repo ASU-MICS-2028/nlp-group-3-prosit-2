@@ -432,7 +432,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Evaluate**
 - [x] Compare generated specs with reference specs (`eval/spec_compare.py`; `run.py --golden` prints it)
-- [ ] Hand logs to Role 4
+- [x] Hand logs to Role 4 (`python -m eval.export_logs` → `results/runs.csv`, `results/steps.csv`; columns in `eval/README.md`)
 - [ ] Architecture diagram for Section B and slides
 
 ### Role 3: Coder & Sandbox
