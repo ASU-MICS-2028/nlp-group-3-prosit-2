@@ -218,6 +218,7 @@ a { color: var(--accent-ink); }
 .status.ok { background: var(--ok-soft); color: var(--ok); } .status.bad { background: var(--bad-soft); color: var(--bad); }
 .response pre { margin: 0; padding: 12px; font: 12.5px/1.6 var(--mono); max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .settings { max-width: 560px; display: flex; flex-direction: column; gap: 16px; }
+.settings .field .row { display: flex; gap: 8px; } .settings .field .row input { flex: 1; min-width: 0; }
 .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 
 /* ---------- assistant ---------- */
