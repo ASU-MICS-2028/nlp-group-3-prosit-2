@@ -28,9 +28,10 @@ import sys
 import time
 from pathlib import Path
 
+import rag
 from core import sandbox
 from core.events import Emit, Event
-from core.sdk import run_agent
+from core.sdk import run_agent, uploads_note
 from core.spec import Spec
 from core.state import LogEntry, ProjectState
 
@@ -256,7 +257,28 @@ def make_prompt(state: ProjectState, how: str) -> str:
     if how != "build" and state.change_files:
         parts.append("The person pointed at these files, so open them first:\n"
                      + "\n".join(f"- {f}" for f in state.change_files))
-    return "\n\n".join(parts)
+    return "\n\n".join(parts) + uploads_note(state.workspace)
+
+
+def system_prompt() -> str:
+    """SYSTEM plus the RAG instruction (empty with RAG=off, so the prompt never names a missing tool)."""
+    return SYSTEM + ("\n\n" + rag.PROMPT if rag.PROMPT else "")
+
+
+def with_search_log(rag_tools: dict, log) -> dict:
+    """Log every search_patterns call as a step: what was asked and which sections came back."""
+    if not rag_tools:
+        return {}
+    description, schema, search = rag_tools["search_patterns"]
+
+    async def search_patterns(args: dict) -> str:
+        text = await search(args)
+        found = [line.split(" [", 1)[0].split(": ", 1)[-1] for line in text.splitlines() if line.startswith("=== Result")]
+        query = str(args.get("query", "")).strip()
+        await log("search_patterns", f"{query!r}: " + ("; ".join(found) if found else "nothing matched"))
+        return text
+
+    return {"search_patterns": (description, schema, search_patterns)}
 
 
 async def run(state: ProjectState, emit: Emit, runner=run_agent) -> ProjectState:
@@ -292,8 +314,9 @@ async def run(state: ProjectState, emit: Emit, runner=run_agent) -> ProjectState
         return "Build accepted. You are done: stop now."
 
     tools = {"run_checks": (CHECK_DESCRIPTION, {"type": "object", "properties": {}}, run_checks),
-             "finish_build": (FINISH_DESCRIPTION, {"type": "object", "properties": {}}, finish_build)}
-    usage = await runner(SYSTEM, make_prompt(state, how), tools, max_turns=MAX_TURNS, max_usd=MAX_USD,
+             "finish_build": (FINISH_DESCRIPTION, {"type": "object", "properties": {}}, finish_build),
+             **with_search_log(rag.tools(), log)}
+    usage = await runner(system_prompt(), make_prompt(state, how), tools, max_turns=MAX_TURNS, max_usd=MAX_USD,
                          workspace=str(ws), writable=WRITABLE)
 
     files = app_files(ws)

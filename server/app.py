@@ -498,11 +498,81 @@ def export(request: Request):
     if not paths:
         raise HTTPException(404, "Nothing to export yet")
     buf = io.BytesIO()
+    name = _slug(s.state.spec.project_name) if s.state.spec else d.name   # the folder may predate the name
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for p in paths:
-            z.write(p, f"{d.name}/{p.relative_to(d)}")
+            z.write(p, f"{name}/{p.relative_to(d)}")
     return Response(buf.getvalue(), media_type="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="{d.name}.zip"'})
+                    headers={"Content-Disposition": f'attachment; filename="{name}.zip"'})
+
+
+# ---------- attachments: the project's knowledge base (agents read them with the Read tool) ----------
+
+UPLOAD_MAX = 5 * 1024 * 1024
+# What Claude's Read tool understands: images, PDFs and text. Word/Excel files are not (export them as PDF/CSV).
+UPLOAD_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+                ".webp": "image/webp", ".pdf": "application/pdf", ".txt": "text/plain", ".md": "text/markdown",
+                ".csv": "text/csv", ".json": "application/json", ".yaml": "text/yaml", ".yml": "text/yaml",
+                ".xml": "application/xml", ".html": "text/html", ".sql": "text/plain"}
+
+
+def _uploads_dir(s: Session) -> Path:
+    """<project>/uploads. Before the project has a name, it gets a folder now and keeps it."""
+    d = _project_dir(s)
+    if d is None:
+        d = s.root / f"project_{secrets.token_hex(3)}"
+        s.state.workspace = str(d)
+    return d / "uploads"
+
+
+@app.post("/api/uploads")
+async def upload(name: str, request: Request):
+    """The raw file is the request body (no multipart parser needed). 5 MB at most."""
+    s = sess(request)
+    ext = Path(name).suffix.lower()
+    if ext not in UPLOAD_TYPES:
+        raise HTTPException(415, f"Can't use {ext or 'this'} files. Images, PDFs and text files work "
+                                 "(save Word or Excel files as PDF or CSV first).")
+    if int(request.headers.get("content-length") or 0) > UPLOAD_MAX:
+        raise HTTPException(413, "That file is over 5 MB.")
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > UPLOAD_MAX:
+            raise HTTPException(413, "That file is over 5 MB.")
+    if not data:
+        raise HTTPException(422, "That file is empty.")
+    d = _uploads_dir(s)
+    d.mkdir(parents=True, exist_ok=True)
+    stem = re.sub(r"[^\w.-]+", "-", Path(name).stem).strip("-.")[:60] or "file"
+    target, n = d / f"{stem}{ext}", 1
+    while target.exists():   # never overwrite an earlier attachment
+        n += 1
+        target = d / f"{stem}-{n}{ext}"
+    target.write_bytes(data)
+    _save(s)
+    return {"path": f"uploads/{target.name}", "name": name, "size": len(data), "type": UPLOAD_TYPES[ext]}
+
+
+def _upload_path(s: Session, fname: str) -> Path:
+    d = _project_dir(s)
+    p = d / "uploads" / fname if d and fname == Path(fname).name else None
+    if not p or not p.is_file():
+        raise HTTPException(404, "No such attachment")
+    return p
+
+
+@app.get("/api/uploads/{fname}")
+def get_upload(fname: str, request: Request):
+    p = _upload_path(sess(request), fname)
+    return FileResponse(p, media_type=UPLOAD_TYPES.get(p.suffix.lower(), "application/octet-stream"),
+                        headers={"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox"})
+
+
+@app.delete("/api/uploads/{fname}")
+def delete_upload(fname: str, request: Request):
+    _upload_path(sess(request), fname).unlink()
+    return {"ok": True}
 
 
 # ---------- run the generated API ----------

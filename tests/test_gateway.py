@@ -278,3 +278,30 @@ def test_password_switches_a_session_to_the_real_agents(client, monkeypatch):
     from server.app import app
     assert not TestClient(app).get("/api/settings").json()["unlocked"]            # other browsers stay locked
     assert not client.post("/api/agents/lock").json()["unlocked"]
+
+
+def test_attachments_are_stored_in_the_project_for_the_agents(client):
+    """Images, PDFs and text up to 5 MB go to <project>/uploads/; agents get them listed in their prompt."""
+    from core.sdk import uploads_note
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+    r = client.post("/api/uploads", params={"name": "Booking form.png"}, content=png).json()
+    assert r["path"] == "uploads/Booking-form.png" and r["type"] == "image/png"
+    assert client.post("/api/uploads", params={"name": "Booking form.png"}, content=png).json()["path"] == "uploads/Booking-form-2.png"
+    assert client.post("/api/uploads", params={"name": "rules.pdf"}, content=b"%PDF-1.4 x").status_code == 200
+
+    assert client.post("/api/uploads", params={"name": "plan.docx"}, content=b"x").status_code == 415
+    assert client.post("/api/uploads", params={"name": "big.pdf"}, content=b"0" * (5 * 1024 * 1024 + 1)).status_code == 413
+    assert client.post("/api/uploads", params={"name": "empty.txt"}, content=b"").status_code == 422
+
+    got = client.get("/api/uploads/Booking-form.png")
+    assert got.status_code == 200 and got.content == png and got.headers["content-type"] == "image/png"
+    assert client.get("/api/uploads/..%2Fstate.json").status_code == 404
+    assert client.delete("/api/uploads/Booking-form-2.png").json()["ok"]
+    assert "uploads/Booking-form.png" in client.get("/api/files").json()["files"]   # @mention-able too
+
+    ws = client.get("/api/state").json()["state"]["workspace"]
+    note = uploads_note(ws)
+    assert "uploads/Booking-form.png" in note and "uploads/rules.pdf" in note and "Booking-form-2" not in note
+
+    client.post("/api/chat", json={"text": "I run a clinic\n\n@uploads/Booking-form.png"})   # the project keeps its folder
+    assert wait_idle(client)["state"]["workspace"] == ws

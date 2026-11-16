@@ -18,7 +18,7 @@ import time
 from pydantic import ValidationError
 
 from core.events import Emit, Event
-from core.sdk import run_agent
+from core.sdk import run_agent, uploads_note
 from core.spec import Spec
 from core.state import LogEntry, ProjectState
 
@@ -137,7 +137,9 @@ async def run(state: ProjectState, emit: Emit, runner=run_agent) -> ProjectState
     tools = {"submit_spec": (DESCRIPTION, Spec.model_json_schema(), submit_spec)}
 
     start = time.time()
-    usage = await runner(SYSTEM, make_prompt(state), tools)
+    note = uploads_note(state.workspace)   # attachments: read-only access to the project folder
+    usage = await (runner(SYSTEM, make_prompt(state) + note, tools, workspace=state.workspace, writable=())
+                   if note else runner(SYSTEM, make_prompt(state), tools))
     seconds = round(time.time() - start, 2)
 
     if "spec" not in accepted:   # the model never produced a spec that passed the checks

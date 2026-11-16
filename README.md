@@ -123,6 +123,12 @@ flowchart LR
 
 Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). The orchestrator looks at the queue between agent steps, whenever more work would follow: before the Tester, and before each fix round. If something is waiting, it stops the build and sends the messages (joined into one, `@` mentions included) to the Architect as a change request; the revised spec goes back to the approval screen. A build that already passed its tests is always delivered first, and a message typed during its last step is sent as a change request right after. Any message counts as a change request, including a question or a thank-you; telling them apart is a possible improvement. Outside a build, queued messages are sent when the running job ends: before a spec they go to the Requirements agent, after it they are a change request.
 
+### Attachments: the project's knowledge base
+
+Drop files on the message box (or use the paperclip, or paste a screenshot): images (PNG, JPEG, GIF, WebP), PDFs and text files (TXT, MD, CSV, JSON, YAML, XML, HTML, SQL), up to 5 MB each. Each shows as a thumbnail and uploads straight away to `<project>/uploads/`; sending adds `@uploads/<file>` to the message, so it shows in the chat and counts as a mention in change requests. Word and Excel files: save them as PDF or CSV first.
+
+Every agent is told which files are attached (`core.sdk.uploads_note`) and reads them with Claude's own Read tool, which understands images and PDFs. The requirements agent and the architect get Read on the project folder only when there are attachments, and can't write anything; the Coder, Tester and single agent already read the project. This is separate from the RAG pattern library (`search_patterns`), which is our coding know-how; attachments are the person's own material about their business.
+
 ### Change requests and `@` mentions
 
 After the spec exists, everything the user types is a **change request**. The user can point at a file by typing `@` in the chat box and picking it from the list, e.g. *"In @app/main.py, let patients reschedule"*. The gateway fills two fields:
@@ -497,8 +503,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
 - [x] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
 - [x] Agree the failure-report format with Role 3
-- [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
-- [ ] `search_patterns` tool for the Coder
+- [x] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
+- [x] `search_patterns` tool for the Coder (and the single agent, so the comparison is fair); each search is a build step
 - [x] Spec checking with Schemathesis (`agents/schema_check.py`; a separate check, not yet part of the build)
 - [ ] Evaluation script that saves results to CSV
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)
