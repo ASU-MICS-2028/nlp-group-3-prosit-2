@@ -12,6 +12,7 @@ Agent format (shared contract): async def run(state, emit) -> state
 import time
 from pathlib import Path
 
+import rag
 from core.events import Emit, Event
 from core.sdk import run_agent
 from core.state import LogEntry, ProjectState
@@ -41,7 +42,12 @@ async def run(state: ProjectState, emit: Emit, runner=run_agent) -> ProjectState
               "\nBuild the API and its tests now.")
 
     start = time.time()
-    usage = await runner(SYSTEM, prompt, {}, max_turns=40, max_usd=1.0, workspace=str(ws))
+    def searched(query: str, results: list) -> None:   # same RAG tool as the Coder, so the comparison is fair
+        found = "; ".join(chunk.title for _, chunk in results) or "nothing matched"
+        state.logs.append(LogEntry(agent="single", action="search_patterns", detail=f"{query!r}: {found}"))
+
+    system = SYSTEM + ("\n\n" + rag.PROMPT if rag.PROMPT else "")
+    usage = await runner(system, prompt, rag.tools(searched), max_turns=40, max_usd=1.0, workspace=str(ws))
     seconds = round(time.time() - start, 2)
 
     written = sorted(str(p.relative_to(ws)) for folder in ("app", "tests") for p in (ws / folder).rglob("*.py"))

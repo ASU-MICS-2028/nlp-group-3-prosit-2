@@ -164,3 +164,28 @@ def test_new_build_prompt_has_spec_and_tasks(state):
     run_with(state, [write_golden, "run_checks", "finish_build"], seen)
     prompt = seen[0]["prompt"]
     assert prompt.startswith("<spec>") and "1. Set up the project." in prompt and "app/ is empty" in prompt
+
+
+def test_coder_searches_the_pattern_library(state):
+    """RAG is wired in: the Coder's prompt asks it to search, the tool returns our patterns, and each search is a step."""
+    got = {}
+
+    async def fake_runner(system, prompt, tools, max_turns, max_usd, workspace, writable):
+        got["system"] = system
+        got["answer"] = await tools["search_patterns"][2]({"query": "unique email duplicate 409"})
+        write_golden(pathlib.Path(workspace))
+        await tools["run_checks"][2]({}); await tools["finish_build"][2]({})
+        return {}
+    st = asyncio.run(C.run(state, emit, runner=fake_runner))
+    assert "search_patterns" in got["system"]
+    assert "project pattern" in got["answer"] and "409" in got["answer"]
+    [step] = [l for l in st.logs if l.action == "search_patterns"]
+    assert step.detail.startswith("'unique email duplicate 409': ") and "nothing matched" not in step.detail
+
+
+def test_rag_off_removes_the_tool_and_the_prompt_line(monkeypatch):
+    """RAG=off is the "no RAG" comparison: no tool, and the prompt doesn't mention one."""
+    import rag
+    monkeypatch.setattr(rag.library, "ENABLED", False)
+    monkeypatch.setattr(rag, "PROMPT", "")
+    assert C.with_search_log(rag.tools(), None) == {} and "search_patterns" not in C.system_prompt()

@@ -497,8 +497,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
 - [x] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
 - [x] Agree the failure-report format with Role 3
-- [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
-- [ ] `search_patterns` tool for the Coder
+- [x] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
+- [x] `search_patterns` tool for the Coder (and the single agent, so the comparison is fair); each search is a build step
 - [x] Spec checking with Schemathesis (`agents/schema_check.py`; a separate check, not yet part of the build)
 - [ ] Evaluation script that saves results to CSV
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)

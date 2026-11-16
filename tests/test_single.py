@@ -47,7 +47,7 @@ def test_single_agent_writes_the_app_from_the_requirements(tmp_path):
     st = ProjectState(requirements=REQ, workspace=str(tmp_path))
     st = asyncio.run(single.run(st, emit, runner=fake_runner))
     assert "<requirements>" in seen["prompt"] and seen["workspace"] == str(tmp_path)
-    assert seen["tools"] == {}                                    # file tools only, none of ours
+    assert list(seen["tools"]) == ["search_patterns"]             # file tools + the same RAG search as the Coder
     assert st.build_ok and st.tests_ok is None                    # tests are run by the benchmark
     assert st.spec is None and "app/main.py" in st.logs[-1].detail   # no spec in this mode
     assert st.logs[-1].cost_usd == 0.1

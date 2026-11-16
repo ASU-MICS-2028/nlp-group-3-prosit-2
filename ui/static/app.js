@@ -759,7 +759,7 @@ const CHIPS = [
   ['zap', 'A library book lending app', 'I run a small library and want to track books, members and who borrowed what.'],
   ['list', 'Describe something else...', null],
 ];
-const STEP_LABEL = { write_file: 'Wrote code', write_files: 'Wrote the project files', read_file: 'Read code', list_files: 'Looked at files', run_checks: 'Tested in the sandbox',
+const STEP_LABEL = { write_file: 'Wrote code', write_files: 'Wrote the project files', read_file: 'Read code', list_files: 'Looked at files', run_checks: 'Tested in the sandbox', search_patterns: 'Looked up a pattern',
   finish: 'Wrapped up', invalid: 'Retried a garbled reply', gave_up: 'Stopped', done: 'Done',
   contract: 'Generated contract tests', write_test: 'Wrote tests', read_test: 'Read tests', run_tests: 'Ran the tests',
   verdict: 'Test result', restored: 'Kept the last working code' };
