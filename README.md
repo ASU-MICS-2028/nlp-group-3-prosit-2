@@ -204,10 +204,12 @@ First finding: every API the Coder has built so far crashes when an id is larger
 | Data (`/data`) | None. Tests use a throwaway DB on `/tmp` | Read-write mount of `workspace/<project>/data/` |
 | Filesystem | `--read-only`, `tmpfs` on `/tmp` | `--read-only`, `tmpfs` on `/tmp` |
 | Memory / CPU / PIDs | 512 MB / 1 CPU / 128 | 512 MB / 1 CPU / 128 |
-| User | Non-root `runner` | Non-root `runner` |
+| User | Non-root (the host user's uid, so `data/` stays writable; never root), no capabilities | Same |
 | Time limit | 120 s per run | Stopped when the session ends or after an idle timeout |
 
-`SANDBOX=local` runs checks as a plain subprocess for machines without Docker. **It is not isolated.** Use it for quick development only, never for the demo.
+All of this lives in `core/sandbox.py`: `run()` for checks and tests, `serve()`/`stop()` for the running API. The image is `sandbox/Dockerfile` (pinned packages in `sandbox/requirements.txt`). The serve container mounts only `app/` (read-only) and `data/`, so the project's `state.json` and `tests/` never reach it. Containers are labelled `mesora.sandbox` and removed when the gateway starts, in case it crashed.
+
+`SANDBOX=local` runs checks and APIs as plain processes for machines without Docker. **It is not isolated.** Use it for quick development only, never for the demo. Even then, generated code gets none of the gateway's environment variables (no API key). The hosted image sets `SANDBOX=local` for now because the gateway container has no Docker daemon; the tests set it too, and `tests/test_sandbox.py` runs the Docker tests only where Docker and the image exist.
 
 ### Agent permissions
 
@@ -300,7 +302,7 @@ These are what let four people build separately and still fit together. **Changi
 ├── server/                  # gateway: sessions, messages, SSE; stubs.py stands in for unfinished agents
 ├── ui/                      # Mesora Blocks frontend (static), served by the gateway
 ├── docs/screenshots/        # images used in this README
-├── sandbox/                 # Dockerfile + check.py
+├── sandbox/                 # Dockerfile + pinned requirements.txt for the sandbox image
 ├── rag/                     # pattern library, docs index, search tool (Role 4)
 ├── golden/clinic/           # golden example
 ├── benchmark/               # Role 4: scenarios/ (requirements, reference spec, hidden rule tests), generic hidden tests, judge()
@@ -458,11 +460,12 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Set up**
 - [ ] Update the golden FastAPI code to SQLite
-- [ ] Sandbox image and data volume
+- [x] Sandbox image and data volume (`sandbox/Dockerfile`; each project's `data/` is mounted at `/data`)
 
 **Build**
-- [ ] Check sandbox: no network, read-only code, throwaway DB, 120 s limit
-- [ ] Serve sandbox: read-only code, writable `data/`, localhost port, port allocation, idle stop
+- [x] Check sandbox: no network, read-only code, throwaway DB, 120 s limit (`core/sandbox.run`, used by `run_checks` and `run_tests`)
+- [x] Serve sandbox: read-only code, writable `data/`, localhost port, port allocation (`SERVE_PORT_RANGE`)
+- [ ] Idle stop for served APIs
 - [ ] Block outbound network for the serve sandbox
 - [x] Coder agent on the SDK: prompt with layout and SQLite conventions (`agents/coder.py`)
 - [x] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it

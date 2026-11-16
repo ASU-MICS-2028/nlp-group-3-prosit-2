@@ -134,7 +134,7 @@ def test_published_api_survives_restart(client):
 
 def test_api_without_health_check_is_refused(tmp_path):
     import asyncio
-    from server.stubs import serve
+    from core.sandbox import serve
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("")
     (tmp_path / "app" / "main.py").write_text("from fastapi import FastAPI\napp = FastAPI()\n")

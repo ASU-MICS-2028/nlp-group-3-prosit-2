@@ -1,0 +1,9 @@
+# What generated code may use (the Coder is told: fastapi, pydantic and the standard library),
+# plus what runs it (uvicorn) and tests it (pytest, httpx for TestClient). Pinned for repeatable checks.
+fastapi==0.163.1
+starlette==1.10.0
+pydantic==2.14.3
+pydantic_core==2.50.4
+uvicorn==0.54.0
+httpx==0.28.1
+pytest==9.2.0

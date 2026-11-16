@@ -20,16 +20,15 @@ How it works, step by step:
 Agent format (shared contract): async def run(state, emit) -> state
 """
 import ast
-import asyncio
 import hashlib
 import json
 import os
 import re
 import sys
-import tempfile
 import time
 from pathlib import Path
 
+from core import sandbox
 from core.events import Emit, Event
 from core.sdk import run_agent
 from core.spec import Spec
@@ -173,18 +172,11 @@ else:
 
 async def run_app_check(ws: Path) -> dict:
     """Import app.main on an empty database, call GET /health, list the served routes.
-    ponytail: a plain local process, not isolated. Role 3's check sandbox replaces this call."""
-    with tempfile.TemporaryDirectory() as tmp:
-        env = {**os.environ, "DATABASE_PATH": str(Path(tmp) / "check.db"), "PYTHONDONTWRITEBYTECODE": "1"}
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-c", RUNTIME_SCRIPT, cwd=ws, env=env,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-        try:
-            output = (await asyncio.wait_for(proc.communicate(), CHECK_TIMEOUT))[0].decode(errors="replace")
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            return {"error": f"The app did not start within {CHECK_TIMEOUT} seconds."}
+    Runs in the check sandbox: no network, code read-only, a throwaway database."""
+    result = await sandbox.run(ws, ["python", "-c", RUNTIME_SCRIPT], timeout=CHECK_TIMEOUT)
+    if result.timed_out:
+        return {"error": f"The app did not start within {CHECK_TIMEOUT} seconds."}
+    output = result.output
     if MARK not in output:
         return {"error": "The app crashed before it could be checked:\n" + output[-1500:]}
     return json.loads(output.rsplit(MARK, 1)[1].strip().splitlines()[0])
