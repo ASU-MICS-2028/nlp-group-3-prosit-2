@@ -646,11 +646,11 @@ Live at **https://mesorablocks.online** (Role 1 owns this). Published APIs live 
 
 | Piece | Where |
 | --- | --- |
-| Server | Hostinger VPS running Coolify (Traefik v3 as the proxy) |
-| App | Coolify application `mesora-blocks`, built from this repo's `Dockerfile`. Network alias `mesora-blocks` |
-| DNS | `mesorablocks.online` and `*.mesorablocks.online` → the server (A records at Hostinger) |
+| Server | VPS at `62.171.173.51` running Coolify (https://coolify.ernejoyson.com, Traefik v3 as the proxy), shared with other projects. Moved here on 2026-11-16 after the Hostinger VPS expired |
+| App | Coolify project "Mesora Blocks", application `mesora-blocks`, built from `main` with this repo's `Dockerfile`. Network alias `mesora-blocks`. Coolify's own health check is off (the image has no curl); the `Dockerfile` has one |
+| DNS | `mesorablocks.online` and `*.mesorablocks.online` → `62.171.173.51` (A records at Hostinger) |
 | HTTPS | Coolify issues the certificate for the main domain. Each published API gets its own Traefik route file (`mesora-<name>.yaml`), so Let's Encrypt issues its certificate on the first visit; no wildcard certificate or DNS API needed |
-| Data | Persistent volume at `/data/workspace` (projects and published snapshots) |
+| Data | Persistent volume at `/data/workspace` (projects and published snapshots), plus the host folder `/data/coolify/proxy/dynamic/mesora` mounted at `/traefik-dynamic` (a Coolify storage with a host path) |
 
 Settings in Coolify: `REQUIREMENTS_AGENT=stub` until there is an API key (see [Signing in to Claude](#signing-in-to-claude)), `PUBLISH_URL=https://{sub}.mesorablocks.online`, `TRAEFIK_DYNAMIC_DIR=/traefik-dynamic` (mounted from `/data/coolify/proxy/dynamic/mesora`), `TRAEFIK_SERVICE_URL=http://mesora-blocks:8000`.
 
@@ -660,13 +660,13 @@ Traefik only watches the top level of its dynamic folder, so the app writes rout
 git clone https://github.com/ASU-MICS-2028/nlp-group-3-prosit-2.git /tmp/mesora && cd /tmp/mesora/deploy && sh install-routes.sh
 ```
 
-To redeploy, push to the branch Coolify builds from, or press **Redeploy** in Coolify.
+Merging to `main` redeploys: a GitHub webhook calls Coolify (`/webhooks/source/github/events/manual`, with a shared secret). Or press **Redeploy** in Coolify.
 
 ---
 
 ## Baseline: the hand-built prototype
 
-The first prototype used hand-written ReAct loops, a custom LLM wrapper (Gemini or Claude), in-memory storage and the same locked-down sandbox. It is archived on the `feat/agent-pipeline` branch and is no longer maintained.
+The first prototype used hand-written ReAct loops, a custom LLM wrapper (Gemini or Claude), in-memory storage and the same locked-down sandbox. It is archived as the git tag `prototype-v0` (`git checkout prototype-v0`) and is no longer maintained.
 
 It stays useful in two ways: reading it shows what the SDK now does for us, and Role 4 uses it as the baseline in the "hand-built vs SDK" comparison.
 
