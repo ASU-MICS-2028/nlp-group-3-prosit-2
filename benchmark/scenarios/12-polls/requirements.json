@@ -1,0 +1,25 @@
+{
+  "project_name": "Team Polls",
+  "description": "A team runs polls; each person votes once per poll and everyone can see the results.",
+  "users": [
+    "team members",
+    "the poll organiser"
+  ],
+  "data": [
+    "polls with a question and whether the poll is closed",
+    "options of a poll with a label",
+    "votes for an option, with who voted"
+  ],
+  "actions": [
+    "the organiser creates a poll and adds its options",
+    "anyone can see the polls and options",
+    "team members vote for an option",
+    "the organiser closes a poll",
+    "anyone can see a poll's results",
+    "the organiser sees all votes"
+  ],
+  "rules": [
+    "each person can vote only once in a poll",
+    "nobody can vote in a closed poll"
+  ]
+}

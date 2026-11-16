@@ -1,0 +1,4 @@
+{
+  "Employee": {"create": {"full_name": "Esi Mensah", "email": "esi@example.com", "annual_days": 20}},
+  "Leave": {"create": {"start_date": "2031-09-01", "end_date": "2031-09-05"}}
+}

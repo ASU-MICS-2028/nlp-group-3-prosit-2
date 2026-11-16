@@ -1,0 +1,4 @@
+{
+  "Pet": {"create": {"name": "Simba", "species": "dog"}},
+  "Application": {"create": {"applicant_name": "Akosua Frimpong"}}
+}

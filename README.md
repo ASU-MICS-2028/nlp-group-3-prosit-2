@@ -303,8 +303,8 @@ These are what let four people build separately and still fit together. **Changi
 ├── sandbox/                 # Dockerfile + check.py
 ├── rag/                     # pattern library, docs index, search tool (Role 4)
 ├── golden/clinic/           # golden example
-├── benchmark/               # scenarios + hidden tests (Role 4)
-├── eval/                    # benchmark runner, results to CSV
+├── benchmark/               # Role 4: scenarios/ (requirements, reference spec, hidden rule tests), generic hidden tests, judge()
+├── eval/                    # Role 4: run.py builds every scenario, judges it, writes results/results.csv
 ├── tests/                   # tests for our own code
 ├── workspace/               # generated projects (gitignored)
 ├── run.py                   # CLI entry point
@@ -486,8 +486,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Set up**
 - [ ] Write the golden tests (against a throwaway SQLite DB)
-- [ ] Write 15–30 benchmark scenarios
-- [ ] Write hidden tests for each scenario
+- [x] Write 15–30 benchmark scenarios (20, in `benchmark/scenarios/`)
+- [x] Write hidden tests for each scenario (generic tests from the spec + rule tests per scenario; `benchmark.judge()`)
 
 **Build**
 - [x] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`

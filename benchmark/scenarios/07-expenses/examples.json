@@ -1,0 +1,4 @@
+{
+  "Category": {"create": {"name": "Food"}},
+  "Expense": {"create": {"amount": 45.5, "spent_on": "2026-03-02", "note": "market"}, "update": {"amount": 50.0, "note": "market and bread"}}
+}

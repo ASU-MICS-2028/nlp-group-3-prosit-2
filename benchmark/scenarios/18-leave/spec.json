@@ -1,0 +1,50 @@
+{
+  "project_name": "Staff Leave",
+  "description": "Employees ask for days off and managers approve or reject the requests.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Employee",
+      "description": "A member of staff.",
+      "fields": [
+        {"name": "full_name", "type": "str"},
+        {"name": "email", "type": "email", "unique": true},
+        {"name": "annual_days", "type": "int", "description": "leave days per year"}
+      ]
+    },
+    {
+      "name": "Leave",
+      "description": "A request for days off.",
+      "belongs_to": ["Employee"],
+      "fields": [
+        {"name": "employee_id", "type": "int"},
+        {"name": "start_date", "type": "date"},
+        {"name": "end_date", "type": "date"},
+        {"name": "days", "type": "int", "read_only": true, "description": "calendar days from start_date to end_date, both included"},
+        {"name": "status", "type": "str", "read_only": true, "description": "pending, approved, rejected or cancelled"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/employees", "summary": "Add an employee", "entity": "Employee", "access": "admin", "request_fields": ["full_name", "email", "annual_days"], "status_code": 201},
+    {"method": "GET", "path": "/employees", "summary": "List employees", "entity": "Employee", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/employees/{id}", "summary": "Get an employee", "entity": "Employee", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/leaves", "summary": "Ask for leave", "entity": "Leave", "access": "user", "request_fields": ["employee_id", "start_date", "end_date"], "status_code": 201},
+    {"method": "GET", "path": "/leaves", "summary": "List all leave requests", "entity": "Leave", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/leaves/{id}", "summary": "Get a leave request", "entity": "Leave", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/leaves/{id}/approve", "summary": "Approve a request", "entity": "Leave", "access": "admin", "status_code": 200},
+    {"method": "POST", "path": "/leaves/{id}/reject", "summary": "Reject a request", "entity": "Leave", "access": "admin", "status_code": 200},
+    {"method": "POST", "path": "/leaves/{id}/cancel", "summary": "Cancel a request", "entity": "Leave", "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/employees/{id}/balance", "summary": "Leave days: {\"employee_id\": int, \"annual_days\": int, \"used_days\": int, \"pending_days\": int, \"remaining_days\": int}", "entity": null, "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "annual_days cannot be negative; reject with 422.",
+    "end_date cannot be before start_date, and start_date cannot be in the past; otherwise reject with 422.",
+    "A new leave has status pending. days is the number of calendar days from start_date to end_date, both included (the same date for both is 1 day).",
+    "An employee's remaining days are annual_days minus the days of their approved leaves. Asking for more days than remain returns 409.",
+    "An employee cannot have two leaves with status pending or approved that share a date; reject with 409.",
+    "approve moves a leave from pending to approved; if its days are more than the employee's remaining days at that moment, it returns 409 and the leave stays pending. reject moves a leave from pending to rejected. cancel moves a leave from pending or approved to cancelled. Any other status change returns 409.",
+    "GET /employees/{id}/balance returns a JSON object with employee_id, annual_days, used_days (days of approved leaves), pending_days (days of pending leaves) and remaining_days (annual_days minus used_days). An unknown employee returns 404.",
+    "employee_id must refer to an existing employee; otherwise 404."
+  ]
+}

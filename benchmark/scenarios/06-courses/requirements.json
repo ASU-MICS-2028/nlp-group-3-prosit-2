@@ -1,0 +1,27 @@
+{
+  "project_name": "Evening Courses",
+  "description": "A training centre where students enrol in courses with limited places.",
+  "users": [
+    "students",
+    "centre staff"
+  ],
+  "data": [
+    "students with full name and email (unique)",
+    "courses with a title and a number of places",
+    "enrolments of a student in a course"
+  ],
+  "actions": [
+    "students register",
+    "staff add and edit courses",
+    "anyone can see the courses",
+    "students enrol in a course",
+    "students withdraw from a course",
+    "staff see all students and enrolments"
+  ],
+  "rules": [
+    "a student can enrol in a course only once",
+    "a course cannot take more students than it has places",
+    "withdrawing frees the place",
+    "a course must have at least one place"
+  ]
+}

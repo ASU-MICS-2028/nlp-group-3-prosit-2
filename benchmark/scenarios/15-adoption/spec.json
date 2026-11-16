@@ -1,0 +1,44 @@
+{
+  "project_name": "Pet Adoption",
+  "description": "An animal shelter lists pets and handles applications to adopt them.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Pet",
+      "description": "An animal looking for a home.",
+      "fields": [
+        {"name": "name", "type": "str"},
+        {"name": "species", "type": "str"},
+        {"name": "adopted", "type": "bool", "read_only": true, "description": "false until an application is approved"}
+      ]
+    },
+    {
+      "name": "Application",
+      "description": "A request to adopt a pet.",
+      "belongs_to": ["Pet"],
+      "fields": [
+        {"name": "pet_id", "type": "int"},
+        {"name": "applicant_name", "type": "str"},
+        {"name": "status", "type": "str", "read_only": true, "description": "pending, approved or rejected"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/pets", "summary": "Add a pet", "entity": "Pet", "access": "admin", "request_fields": ["name", "species"], "status_code": 201},
+    {"method": "GET", "path": "/pets", "summary": "List pets", "entity": "Pet", "access": "public", "status_code": 200},
+    {"method": "GET", "path": "/pets/{id}", "summary": "Get a pet", "entity": "Pet", "access": "public", "status_code": 200},
+    {"method": "POST", "path": "/applications", "summary": "Apply to adopt a pet", "entity": "Application", "access": "user", "request_fields": ["pet_id", "applicant_name"], "status_code": 201},
+    {"method": "GET", "path": "/applications", "summary": "List all applications", "entity": "Application", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/applications/{id}", "summary": "Get an application", "entity": "Application", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/applications/{id}/approve", "summary": "Approve an application", "entity": "Application", "access": "admin", "status_code": 200},
+    {"method": "POST", "path": "/applications/{id}/reject", "summary": "Reject an application", "entity": "Application", "access": "admin", "status_code": 200}
+  ],
+  "rules": [
+    "A new pet has adopted false. A new application has status pending.",
+    "Applying for a pet that is already adopted returns 409.",
+    "Approving sets the application's status to approved and the pet's adopted to true, and sets every other pending application for the same pet to rejected.",
+    "Rejecting sets the application's status to rejected.",
+    "Only a pending application can be approved or rejected; otherwise 409.",
+    "pet_id must refer to an existing pet; otherwise 404."
+  ]
+}

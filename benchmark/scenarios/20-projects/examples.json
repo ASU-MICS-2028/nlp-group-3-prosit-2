@@ -1,0 +1,4 @@
+{
+  "Project": {"create": {"name": "Website"}},
+  "Task": {"create": {"title": "Write the home page"}}
+}

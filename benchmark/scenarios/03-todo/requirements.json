@@ -1,0 +1,24 @@
+{
+  "project_name": "Personal Tasks",
+  "description": "A to-do list where each person manages their own tasks.",
+  "users": [
+    "people with tasks",
+    "an administrator"
+  ],
+  "data": [
+    "tasks with a title, an optional due date, whether it is done, and who owns it"
+  ],
+  "actions": [
+    "people add a task",
+    "people see their own tasks",
+    "people rename a task or change its due date",
+    "people mark a task as done",
+    "people delete a task",
+    "the administrator sees everyone's tasks"
+  ],
+  "rules": [
+    "people can only see and change their own tasks",
+    "a task that is already done cannot be completed again",
+    "a task must have a title"
+  ]
+}

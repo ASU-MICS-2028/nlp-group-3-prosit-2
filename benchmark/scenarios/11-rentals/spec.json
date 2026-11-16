@@ -1,0 +1,47 @@
+{
+  "project_name": "Car Rentals",
+  "description": "A small company rents out its vehicles by the day.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Vehicle",
+      "description": "A vehicle for hire.",
+      "fields": [
+        {"name": "plate", "type": "str", "unique": true},
+        {"name": "model", "type": "str"},
+        {"name": "daily_rate", "type": "float"}
+      ]
+    },
+    {
+      "name": "Rental",
+      "description": "A vehicle rented for some days.",
+      "belongs_to": ["Vehicle"],
+      "fields": [
+        {"name": "vehicle_id", "type": "int"},
+        {"name": "customer_name", "type": "str"},
+        {"name": "start_date", "type": "date"},
+        {"name": "end_date", "type": "date"},
+        {"name": "total", "type": "float", "read_only": true, "description": "daily_rate x number of days"},
+        {"name": "returned", "type": "bool", "read_only": true, "description": "false until returned"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/vehicles", "summary": "Add a vehicle", "entity": "Vehicle", "access": "admin", "request_fields": ["plate", "model", "daily_rate"], "status_code": 201},
+    {"method": "GET", "path": "/vehicles", "summary": "List vehicles", "entity": "Vehicle", "access": "public", "status_code": 200},
+    {"method": "GET", "path": "/vehicles/{id}", "summary": "Get a vehicle", "entity": "Vehicle", "access": "public", "status_code": 200},
+    {"method": "DELETE", "path": "/vehicles/{id}", "summary": "Remove a vehicle", "entity": "Vehicle", "access": "admin", "status_code": 204},
+    {"method": "POST", "path": "/rentals", "summary": "Rent a vehicle", "entity": "Rental", "access": "user", "request_fields": ["vehicle_id", "customer_name", "start_date", "end_date"], "status_code": 201},
+    {"method": "GET", "path": "/rentals", "summary": "List all rentals", "entity": "Rental", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/rentals/{id}", "summary": "Get a rental", "entity": "Rental", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/rentals/{id}/return", "summary": "Return a vehicle", "entity": "Rental", "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "end_date must be after start_date; otherwise reject with 422.",
+    "start_date cannot be in the past; reject with 422.",
+    "A vehicle cannot have two rentals that are not returned and whose dates overlap; reject with 409. A rental that starts on the day another ends does not overlap.",
+    "total is the vehicle's daily_rate multiplied by the number of days between start_date and end_date.",
+    "A new rental has returned false. Returning sets returned to true; returning a rental that is already returned returns 409.",
+    "vehicle_id must refer to an existing vehicle; otherwise 404."
+  ]
+}

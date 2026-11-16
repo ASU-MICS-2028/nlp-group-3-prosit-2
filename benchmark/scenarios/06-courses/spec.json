@@ -1,0 +1,51 @@
+{
+  "project_name": "Evening Courses",
+  "description": "A training centre where students enrol in courses with limited places.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Student",
+      "description": "A person taking courses.",
+      "fields": [
+        {"name": "full_name", "type": "str"},
+        {"name": "email", "type": "email", "unique": true}
+      ]
+    },
+    {
+      "name": "Course",
+      "description": "A course with limited places.",
+      "fields": [
+        {"name": "title", "type": "str"},
+        {"name": "capacity", "type": "int", "description": "number of places"}
+      ]
+    },
+    {
+      "name": "Enrolment",
+      "description": "A student's place in a course.",
+      "belongs_to": ["Student", "Course"],
+      "fields": [
+        {"name": "student_id", "type": "int"},
+        {"name": "course_id", "type": "int"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/students", "summary": "Register a student", "entity": "Student", "access": "public", "request_fields": ["full_name", "email"], "status_code": 201},
+    {"method": "GET", "path": "/students", "summary": "List students", "entity": "Student", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/students/{id}", "summary": "Get a student", "entity": "Student", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/courses", "summary": "Add a course", "entity": "Course", "access": "admin", "request_fields": ["title", "capacity"], "status_code": 201},
+    {"method": "GET", "path": "/courses", "summary": "List courses", "entity": "Course", "access": "public", "status_code": 200},
+    {"method": "GET", "path": "/courses/{id}", "summary": "Get a course", "entity": "Course", "access": "public", "status_code": 200},
+    {"method": "PUT", "path": "/courses/{id}", "summary": "Update a course", "entity": "Course", "access": "admin", "request_fields": ["title", "capacity"], "status_code": 200},
+    {"method": "POST", "path": "/enrolments", "summary": "Enrol in a course", "entity": "Enrolment", "access": "user", "request_fields": ["student_id", "course_id"], "status_code": 201},
+    {"method": "GET", "path": "/enrolments", "summary": "List all enrolments", "entity": "Enrolment", "access": "admin", "status_code": 200},
+    {"method": "DELETE", "path": "/enrolments/{id}", "summary": "Withdraw from a course", "entity": "Enrolment", "access": "user", "status_code": 204}
+  ],
+  "rules": [
+    "capacity must be at least 1; reject with 422.",
+    "A student can be enrolled in the same course only once; a second enrolment returns 409.",
+    "A course cannot have more enrolments than its capacity; enrolling in a full course returns 409.",
+    "Deleting an enrolment frees its place in the course.",
+    "student_id and course_id must refer to existing records; otherwise 404."
+  ]
+}

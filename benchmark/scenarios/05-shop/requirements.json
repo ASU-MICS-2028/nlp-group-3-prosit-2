@@ -1,0 +1,27 @@
+{
+  "project_name": "Corner Shop Orders",
+  "description": "A shop that keeps its stock and takes orders for its products.",
+  "users": [
+    "customers",
+    "the shop owner"
+  ],
+  "data": [
+    "products with a name (unique), a price and the number in stock",
+    "orders of one product with a quantity, the total price and a status (placed or cancelled)"
+  ],
+  "actions": [
+    "the owner adds products and changes their price or stock",
+    "anyone can see the products",
+    "customers place an order",
+    "customers view an order",
+    "customers cancel an order",
+    "the owner sees all orders"
+  ],
+  "rules": [
+    "an order cannot be for more than is in stock",
+    "placing an order takes the items out of stock",
+    "cancelling an order puts the items back",
+    "the total is worked out by the system",
+    "prices must be more than zero and stock cannot be negative"
+  ]
+}

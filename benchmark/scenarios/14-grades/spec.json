@@ -1,0 +1,49 @@
+{
+  "project_name": "School Grades",
+  "description": "A school records each student's score in each subject and shows averages.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Student",
+      "description": "A pupil.",
+      "fields": [
+        {"name": "full_name", "type": "str"},
+        {"name": "student_number", "type": "str", "unique": true}
+      ]
+    },
+    {
+      "name": "Subject",
+      "description": "Something that is taught.",
+      "fields": [
+        {"name": "name", "type": "str", "unique": true}
+      ]
+    },
+    {
+      "name": "Grade",
+      "description": "A student's score in a subject.",
+      "belongs_to": ["Student", "Subject"],
+      "fields": [
+        {"name": "student_id", "type": "int"},
+        {"name": "subject_id", "type": "int"},
+        {"name": "score", "type": "float"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/students", "summary": "Add a student", "entity": "Student", "access": "admin", "request_fields": ["full_name", "student_number"], "status_code": 201},
+    {"method": "GET", "path": "/students", "summary": "List students", "entity": "Student", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/students/{id}", "summary": "Get a student", "entity": "Student", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/subjects", "summary": "Add a subject", "entity": "Subject", "access": "admin", "request_fields": ["name"], "status_code": 201},
+    {"method": "GET", "path": "/subjects", "summary": "List subjects", "entity": "Subject", "access": "public", "status_code": 200},
+    {"method": "POST", "path": "/grades", "summary": "Record a grade", "entity": "Grade", "access": "admin", "request_fields": ["student_id", "subject_id", "score"], "status_code": 201},
+    {"method": "GET", "path": "/grades", "summary": "List all grades", "entity": "Grade", "access": "admin", "status_code": 200},
+    {"method": "PUT", "path": "/grades/{id}", "summary": "Correct a grade's score", "entity": "Grade", "access": "admin", "request_fields": ["score"], "status_code": 200},
+    {"method": "GET", "path": "/students/{id}/average", "summary": "A student's average: {\"student_id\": int, \"count\": int, \"average\": float or null}", "entity": null, "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "score must be between 0 and 100 inclusive; otherwise reject with 422 (when recording and when correcting).",
+    "A student can have only one grade per subject; a second one returns 409.",
+    "GET /students/{id}/average returns a JSON object with student_id, count (the number of grades) and average (the mean of the student's scores, null when there are none). An unknown student returns 404.",
+    "student_id and subject_id must refer to existing records; otherwise 404."
+  ]
+}
