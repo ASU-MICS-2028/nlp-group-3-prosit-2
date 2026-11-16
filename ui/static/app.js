@@ -51,7 +51,13 @@ function hydrateIcons(root = document) {
 
 // ---------- helpers ----------
 const $ = s => document.querySelector(s);
-const userText = s => esc(s).replace(/(^|\s)@([\w./-]+)/g, '$1<span class="mention">@$2</span>');
+// @uploads/<file> shows the attachment (a thumbnail for images); any other @path is a highlighted mention
+const userText = s => esc(s).replace(/(^|\s)@([\w./-]+)/g, (m, sp, p) => {
+  if (!p.startsWith('uploads/')) return `${sp}<span class="mention">@${p}</span>`;
+  const url = `/api/uploads/${encodeURIComponent(p.slice(8))}`;
+  return `${sp}<a class="att-ref" href="${url}" target="_blank" rel="noopener">${/\.(png|jpe?g|gif|webp)$/i.test(p)
+    ? `<img src="${url}" alt="" loading="lazy">` : icon('file')}<span>${p.slice(8)}</span></a>`;
+});
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function api(path, opts = {}) {
@@ -1117,6 +1123,7 @@ document.addEventListener('click', async e => {
   if (t.id === 'agents-unlock') return agentsGate(true);
   if (t.id === 'agents-lock') return agentsGate(false);
   if (t.id === 'attach-btn') return $('#attach').click();
+  if (t.dataset?.att !== undefined && t.classList.contains('att-x')) return removeAttachment(+t.dataset.att);
 });
 
 function caretCol(lineEl, sel) {
@@ -1139,10 +1146,15 @@ document.addEventListener('input', e => {
   }
 });
 
-$('#composer').addEventListener('submit', e => { e.preventDefault(); send($('#input').value); });
+$('#composer').addEventListener('submit', e => {
+  e.preventDefault();
+  if (pending.some(p => p.uploading)) return toast('Still uploading, one moment...');
+  const refs = takeAttachments();
+  send([$('#input').value.trim(), refs].filter(Boolean).join('\n\n'));
+});
 $('#input').addEventListener('keydown', e => {
   if (mention.key_(e)) return;
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($('#input').value); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#composer').requestSubmit(); }
 });
 $('#input').addEventListener('input', () => { autoGrow(); mention.update(); });
 $('#composer').addEventListener('pointerdown', e => {   // pick before the textarea loses focus
@@ -1154,14 +1166,70 @@ $('#send').addEventListener('pointerdown', e => e.preventDefault());   // keep t
 $('#messages').addEventListener('pointerdown', e => {   // phone: blurring the composer moves the layout, so a tap
   if (e.target.closest('button') && document.activeElement === $('#input')) e.preventDefault();   // on Approve etc. would miss
 });
-$('#attach').addEventListener('change', async e => {
-  const f = e.target.files[0]; e.target.value = '';
-  if (!f) return;
-  if (f.size > 50_000) return toast('File too large (max 50 KB).');
-  const text = await f.text();
-  const input = $('#input');
-  input.value = `${input.value ? input.value + '\n\n' : ''}Here is ${f.name}:\n${text}`;
-  autoGrow(); input.focus();
+// ---------- attachments: upload now, send as @uploads/<file> with the message ----------
+const ATTACH_EXT = $('#attach').accept.split(',');
+const ATTACH_MAX = 5 * 1024 * 1024;
+let pending = [];   // { name, type, url (image preview), path (once uploaded), uploading }
+
+async function addFiles(files) {
+  for (const f of files) {
+    const ext = '.' + f.name.split('.').pop().toLowerCase();
+    if (!ATTACH_EXT.includes(ext)) { toast(`Can't use ${f.name}: images, PDFs and text files work.`); continue; }
+    if (f.size > ATTACH_MAX) { toast(`${f.name} is over 5 MB.`); continue; }
+    const item = { name: f.name, type: f.type, url: f.type.startsWith('image/') ? URL.createObjectURL(f) : null, uploading: true };
+    pending.push(item); renderAttachments();
+    try {
+      const res = await fetch('/api/uploads?name=' + encodeURIComponent(f.name), { method: 'POST', body: f });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `Upload failed (${res.status})`);
+      Object.assign(item, data, { uploading: false });
+    } catch (e) {
+      pending = pending.filter(p => p !== item); toast(e.message);
+    }
+    renderAttachments();
+  }
+}
+
+function renderAttachments() {
+  const el = $('#attachments');
+  el.hidden = !pending.length;
+  el.innerHTML = pending.map((p, i) => `<div class="att${p.uploading ? ' loading' : ''}" title="${esc(p.name)}">
+    ${p.url ? `<img src="${p.url}" alt="">` : `<span class="att-ic">${icon('file')}<b>${esc(p.name.split('.').pop())}</b></span>`}
+    <span class="att-name">${esc(p.name)}</span>
+    <button type="button" class="att-x" data-att="${i}" title="Remove" aria-label="Remove ${esc(p.name)}">${icon('x')}</button></div>`).join('');
+}
+
+function removeAttachment(i) {
+  const [p] = pending.splice(i, 1);
+  if (p?.path) fetch('/api/uploads/' + encodeURIComponent(p.path.slice(8)), { method: 'DELETE' });
+  if (p?.url) URL.revokeObjectURL(p.url);
+  renderAttachments();
+}
+
+function takeAttachments() {   // the @references to send with the message; clears the tray
+  const refs = pending.filter(p => p.path).map(p => '@' + p.path).join(' ');
+  pending.forEach(p => p.url && URL.revokeObjectURL(p.url));
+  pending = []; renderAttachments();
+  return refs;
+}
+
+$('#attach').addEventListener('change', e => { addFiles([...e.target.files]); e.target.value = ''; });
+$('#input').addEventListener('paste', e => {   // pasted screenshots and files
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) { e.preventDefault(); addFiles(files); }
+});
+const composer = $('#composer');
+['dragenter', 'dragover'].forEach(t => composer.addEventListener(t, e => {
+  if (!e.dataTransfer?.types.includes('Files')) return;
+  e.preventDefault(); composer.classList.add('dropping');
+}));
+['dragleave', 'drop'].forEach(t => composer.addEventListener(t, e => {
+  if (t === 'dragleave' && composer.contains(e.relatedTarget)) return;
+  composer.classList.remove('dropping');
+}));
+composer.addEventListener('drop', e => {
+  if (!e.dataTransfer?.files.length) return;
+  e.preventDefault(); addFiles([...e.dataTransfer.files]);
 });
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setView('search'); $('#search-input')?.focus(); }

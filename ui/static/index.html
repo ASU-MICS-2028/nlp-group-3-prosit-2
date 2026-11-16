@@ -85,10 +85,11 @@
           </div>
           <div class="messages" id="messages"></div>
           <form class="composer" id="composer">
+            <div class="attachments" id="attachments" hidden></div>
             <textarea id="input" rows="1" placeholder="Ask a question or describe what you want..."></textarea>
             <div class="composer-row">
-              <button type="button" class="icon-btn" id="attach-btn" title="Attach a text file"><i data-icon="paperclip"></i></button>
-              <input type="file" id="attach" accept=".txt,.md,.json,.csv" hidden>
+              <button type="button" class="icon-btn" id="attach-btn" title="Attach images, PDFs or text files (up to 5 MB each), or drop them here"><i data-icon="paperclip"></i></button>
+              <input type="file" id="attach" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.csv,.json,.yaml,.yml,.xml,.html,.sql" multiple hidden>
               <button type="submit" class="send" id="send" title="Send"><i data-icon="arrowUp"></i></button>
             </div>
           </form>

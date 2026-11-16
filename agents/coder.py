@@ -31,7 +31,7 @@ from pathlib import Path
 import rag
 from core import sandbox
 from core.events import Emit, Event
-from core.sdk import run_agent
+from core.sdk import run_agent, uploads_note
 from core.spec import Spec
 from core.state import LogEntry, ProjectState
 
@@ -257,7 +257,7 @@ def make_prompt(state: ProjectState, how: str) -> str:
     if how != "build" and state.change_files:
         parts.append("The person pointed at these files, so open them first:\n"
                      + "\n".join(f"- {f}" for f in state.change_files))
-    return "\n\n".join(parts)
+    return "\n\n".join(parts) + uploads_note(state.workspace)
 
 
 def system_prompt() -> str:

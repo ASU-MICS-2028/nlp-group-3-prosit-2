@@ -189,3 +189,9 @@ def test_rag_off_removes_the_tool_and_the_prompt_line(monkeypatch):
     monkeypatch.setattr(rag.library, "ENABLED", False)
     monkeypatch.setattr(rag, "PROMPT", "")
     assert C.with_search_log(rag.tools(), None) == {} and "search_patterns" not in C.system_prompt()
+
+
+def test_coder_is_told_about_attachments(state):
+    (pathlib.Path(state.workspace) / "uploads").mkdir(parents=True)
+    (pathlib.Path(state.workspace) / "uploads" / "menu.pdf").write_bytes(b"%PDF")
+    assert "<attachments>\nuploads/menu.pdf\n</attachments>" in C.make_prompt(state, "build")

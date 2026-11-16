@@ -15,11 +15,13 @@ state.requirements in code, so the model can't change it after the user agreed.
 import json
 import os
 import time
+from functools import partial
 from typing import Awaitable, Callable, Optional
 
 from pydantic import ValidationError
 
 from core.events import Emit, Event
+from core.sdk import file_guard, uploads_note
 from core.spec import Requirements
 from core.state import LogEntry, Message, ProjectState
 
@@ -147,7 +149,9 @@ async def run(state: ProjectState, emit: Emit, runner: Optional[Runner] = None) 
 
     t0 = time.time()
     try:
-        usage = await (runner or sdk_runner)(SYSTEM, _transcript(state), tools, SCHEMAS)
+        note = uploads_note(state.workspace)
+        call = runner or (partial(sdk_runner, workspace=state.workspace) if note else sdk_runner)
+        usage = await call(SYSTEM, _transcript(state) + note, tools, SCHEMAS)
     except Exception as e:   # provider down, no credentials...: tell the person, keep the chat
         usage, decided = {}, decided or {"action": "error", "error": f"{type(e).__name__}: {str(e)[:200]}"}
     seconds, tokens, cost = round(time.time() - t0, 2), usage.get("tokens", 0), usage.get("cost_usd", 0.0)
@@ -177,8 +181,10 @@ async def run(state: ProjectState, emit: Emit, runner: Optional[Runner] = None) 
     return state
 
 
-async def sdk_runner(system: str, prompt: str, tools: dict[str, Tool], schemas: dict[str, dict]) -> dict:
-    """One agent turn on the Claude Agent SDK: our tools only, served as the in-process MCP server 'prosit'."""
+async def sdk_runner(system: str, prompt: str, tools: dict[str, Tool], schemas: dict[str, dict],
+                     workspace: Optional[str] = None) -> dict:
+    """One agent turn on the Claude Agent SDK: our tools only, served as the in-process MCP server 'prosit'.
+    With a workspace (the person attached files), it may also Read inside it, nothing else."""
     from claude_agent_sdk import (ClaudeAgentOptions, ClaudeSDKClient, ResultMessage,
                                   create_sdk_mcp_server, tool)
 
@@ -192,8 +198,10 @@ async def sdk_runner(system: str, prompt: str, tools: dict[str, Tool], schemas: 
     options = ClaudeAgentOptions(
         model=MODEL, system_prompt=system, max_turns=MAX_TURNS,
         mcp_servers={"prosit": server},
-        allowed_tools=[f"mcp__prosit__{n}" for n in tools],
-        tools=[],                      # no built-in tools at all (no Bash, files or web)
+        allowed_tools=[f"mcp__prosit__{n}" for n in tools] + (["Read"] if workspace else []),
+        tools=["Read"] if workspace else [],   # no Bash, no web, no writing; Read only for attachments
+        cwd=workspace,
+        hooks=file_guard(workspace, (), ["Read"]) if workspace else {},
         setting_sources=[],            # ignore any local Claude Code settings or CLAUDE.md
         strict_mcp_config=True,        # and any other MCP servers on the machine
         max_budget_usd=MAX_TURN_USD,   # hard stop on cost per turn

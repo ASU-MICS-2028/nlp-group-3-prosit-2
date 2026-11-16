@@ -301,6 +301,19 @@ a { color: var(--accent-ink); }
 .composer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
 .composer-row .icon-btn i { color: var(--muted); }
 .composer { position: relative; }
+.composer.dropping { border-color: var(--accent); border-style: dashed; background: var(--accent-soft); }
+.attachments { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; }
+.att { position: relative; flex: none; width: 86px; border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; background: var(--side); }
+.att img, .att .att-ic { display: flex; width: 100%; height: 62px; object-fit: cover; align-items: center; justify-content: center; flex-direction: column; gap: 2px; color: var(--muted); }
+.att .att-ic i { width: 20px; height: 20px; } .att .att-ic b { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+.att-name { display: block; font-size: 11px; padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att.loading { opacity: .55; } .att.loading::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); animation: shimmer 1s infinite; }
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.att-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; padding: 0; }
+.att-x i { width: 12px; height: 12px; pointer-events: none; }
+.att-ref { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; max-width: 100%; margin: 2px 0; padding: 4px 8px 4px 4px; border-radius: 8px; background: rgba(255,255,255,.18); color: inherit; text-decoration: none; font-size: 13px; }
+.att-ref img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; }
+.att-ref i { width: 18px; height: 18px; margin-left: 4px; }
 .menu.mention-menu { position: absolute; top: auto; bottom: calc(100% + 6px); left: 8px; right: 8px; max-height: min(300px, 45vh); overflow: auto; }
 .mention-menu button { font-family: var(--mono); font-size: 13px; }
 .mention-menu button.on { background: var(--accent-soft); color: var(--accent-ink); }
@@ -555,7 +568,8 @@ button.mnode-name:hover { color: var(--lc); }
   .eps .e code { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .eps .e .s { flex-basis: 100%; white-space: normal; order: 3; }
   .acard-foot .btn { flex: 1 1 calc(50% - 8px); justify-content: center; min-height: 44px; white-space: nowrap; font-size: 14.5px; padding-inline: 10px; }
-  .composer { margin: 0 12px 10px; border-radius: 22px; padding: 6px 6px 6px 6px; display: flex; align-items: flex-end; gap: 4px; }
+  .composer { margin: 0 12px 10px; border-radius: 22px; padding: 6px 6px 6px 6px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px; }
+  .composer .attachments { order: 0; flex-basis: 100%; padding: 4px 4px 2px; }
   .composer textarea { order: 2; flex: 1; padding: 9px 4px; max-height: 140px; }
   .composer-row { display: contents; }
   .composer-row #attach-btn { order: 1; width: 40px; height: 40px; }

@@ -110,3 +110,19 @@ def test_checks_reject_get_with_request_body():
                     "request_fields": ["title"]}])
     problems = A.check_spec(spec)
     assert any("GET endpoints cannot accept request_fields" in p for p in problems)
+
+
+def test_architect_reads_attachments_read_only(tmp_path):
+    """With attachments, the Architect is told about them and may Read the project folder, never write."""
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads" / "price-list.csv").write_text("item,price\n")
+    seen = {}
+
+    async def fake_runner(system, prompt, tools, **kw):
+        seen.update(prompt=prompt, **kw)
+        await tools["submit_spec"][2](GOLDEN_SPEC)
+        return {}
+    st = ProjectState(requirements=GOLDEN_REQ, workspace=str(tmp_path))
+    asyncio.run(A.run(st, emit, runner=fake_runner))
+    assert "uploads/price-list.csv" in seen["prompt"]
+    assert seen["workspace"] == str(tmp_path) and seen["writable"] == ()
