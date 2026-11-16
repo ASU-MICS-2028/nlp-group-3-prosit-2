@@ -62,6 +62,7 @@ class Session:
         self.root = WORKSPACES / sid
         self.state = ProjectState()
         self.revisions: list[str] = []      # change requests after the first spec
+        self.rounds: list[dict] = []        # one per change request: the version it replaced, for the chat timeline
         self.queued: list[str] = []         # messages sent while a job was running; sent when it ends
         self.busy: Optional[str] = None     # label of the running job
         self.error: Optional[str] = None
@@ -104,7 +105,7 @@ def _save(s: Session) -> None:
     if d is None:
         return
     d.mkdir(parents=True, exist_ok=True)
-    (d / "state.json").write_text(json.dumps({"state": s.state.model_dump(mode="json"), "revisions": s.revisions}, indent=1))
+    (d / "state.json").write_text(json.dumps({"state": s.state.model_dump(mode="json"), "revisions": s.revisions, "rounds": s.rounds}, indent=1))
 
 
 def _stop_server(s: Session) -> None:
@@ -126,6 +127,7 @@ def snapshot(s: Session) -> dict:
     return {
         "state": s.state.model_dump(mode="json"),
         "revisions": s.revisions,
+        "rounds": s.rounds,
         "queued": s.queued,
         "phase": _phase(s),
         "busy": s.busy,
@@ -277,7 +279,7 @@ async def _build(s: Session) -> None:
         if not s.queued:
             return None
         text, s.queued = "\n\n".join(s.queued), []
-        s.revisions.append(text)
+        _add_round(s, text, built=False)   # this build is cut short
         return text, mentions(s, text)
 
     s.state = await orchestrator.build(s.state, s.emit, check_queue=check_queue)
@@ -351,10 +353,20 @@ async def change(body: Text, request: Request):
     return _change(s, text)
 
 
+def _add_round(s: Session, text: str, built: bool = True) -> None:
+    """Keep the version this change request replaces, so the chat shows it in place before the request."""
+    st = s.state
+    s.revisions.append(text)
+    s.rounds.append({"request": text, "spec": st.spec.model_dump(mode="json") if st.spec else None,
+                     "log_end": len(st.logs),   # its build steps are logs[:log_end]
+                     "build": {k: getattr(st, k) for k in ("build_ok", "tests_ok", "test_summary", "test_results", "test_report")}
+                     if built and st.spec_approved else None})
+
+
 def _change(s: Session, text: str) -> dict:
     """Change request. @mentioned files go to state.change_files for the Architect and Coder."""
     async def work():
-        s.revisions.append(text)
+        _add_round(s, text)
         s.state.change_request, s.state.change_files = text, mentions(s, text)
         await _design(s)
 
@@ -413,6 +425,7 @@ def open_project(body: Slug, request: Request):
     _stop_server(s)
     data = json.loads(f.read_text())
     s.state, s.revisions, s.error, s.queued = ProjectState.model_validate(data["state"]), data.get("revisions", []), None, []
+    s.rounds = data.get("rounds", [])
     return snapshot(s)
 
 
@@ -422,7 +435,7 @@ def new_project(request: Request):
     if s.busy:
         raise HTTPException(409, f"Busy: {s.busy}")
     _stop_server(s)
-    s.state, s.revisions, s.error, s.queued = ProjectState(), [], None, []
+    s.state, s.revisions, s.rounds, s.error, s.queued = ProjectState(), [], [], None, []
     return snapshot(s)
 
 
