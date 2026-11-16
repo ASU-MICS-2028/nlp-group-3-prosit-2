@@ -95,6 +95,7 @@ def test_all_pass_on_the_golden_app(state):
     assert "All tests passed" in replies[1] and "accepted" in replies[2]
     log = st.logs[-1]
     assert (log.agent, log.action, log.tokens, log.cost_usd) == ("tester", "run_tests", 100, 0.02)
+    assert not any(log.action == "failures" for log in st.logs)   # nothing failed, nothing to keep
 
 
 def test_the_tester_may_write_in_tests_only(tmp_path):
@@ -181,6 +182,9 @@ def test_fix_round_runs_the_same_tests_without_the_model(state):
     st = asyncio.run(T.run(st, emit, runner=no_model))
     assert st.tests_ok is False and st.failures[0].model_dump() == DUPLICATE
     assert st.logs[-1].action == "retest" and st.logs[-1].tokens == 0
+    # Each failing run leaves the failures in the step log, so the evaluation can see what was caught.
+    kept = [log.detail for log in st.logs if log.action == "failures"]
+    assert len(kept) == 2 and all("test_duplicate_phone_is_rejected (POST /patients): expected 409, got 201" in d for d in kept)
 
     # Now the Coder really fixes it.
     _, old, new = BUG
