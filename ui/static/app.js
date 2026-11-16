@@ -713,8 +713,14 @@ async function renderSettings() {
   $('#view-settings').innerHTML = `
     <div class="panel-head">Settings</div>
     <div class="panel-body"><div class="settings">
-      <div class="card"><h4>Agents</h4><p>Set by whoever runs the server (<code>LLM_MODEL</code> and <code>SANDBOX</code> in <code>.env</code>).</p>
-        <div class="hint">Model: ${esc(settings.model)} · Sandbox: ${esc(settings.sandbox)}</div>
+      <div class="card"><h4>Agents</h4>
+        ${!settings.gate ? `<p>Set by whoever runs the server (<code>LLM_MODEL</code> and <code>SANDBOX</code> in <code>.env</code>).</p>`
+          : settings.unlocked ? `<p>Real agents are on for this browser session.</p>
+            <div class="row" style="margin-top:12px"><button class="btn" id="agents-lock">${icon('x')}Back to demo agents</button></div>`
+          : `<p>This server runs demo agents that replay a saved example. Enter the password to build with the real agents.</p>
+            <div class="row" style="margin-top:12px"><input id="agents-pw" type="password" autocomplete="current-password" placeholder="Password">
+            <button class="btn primary" id="agents-unlock">${icon('check')}Use real agents</button></div>`}
+        <div class="hint" style="margin-top:10px">Model: ${esc(settings.model)} · Sandbox: ${esc(settings.sandbox)}</div>
       </div>
       ${install.can() ? `<div class="card"><h4>Install the app</h4><p>Put Mesora Blocks on your home screen or desktop. It opens in its own window, like any other app.</p>
         <div class="row" style="margin-top:12px"><button class="btn primary" id="set-install">${icon('install')}Install app</button></div></div>` : ''}
@@ -724,6 +730,13 @@ async function renderSettings() {
       <div class="row"><button class="btn primary" id="set-save">${icon('check')}Save settings</button>
         <span class="hint">This session: ${S.tokens.toLocaleString()} tokens${S.model ? ` on ${esc(S.model)}` : ''}.</span></div>
     </div></div>`;
+}
+
+async function agentsGate(unlock) {
+  try {
+    settings = await api(unlock ? '/api/agents/unlock' : '/api/agents/lock', { body: unlock ? { password: $('#agents-pw').value } : {} });
+    toast(settings.unlocked ? 'Real agents on' : 'Back to demo agents'); renderSettings();
+  } catch (e) { toast(e.message); }
 }
 
 async function saveSettings() {
@@ -1101,6 +1114,8 @@ document.addEventListener('click', async e => {
   if (t.id === 'pub-copy') { navigator.clipboard?.writeText(S.published.url); return toast('URL copied'); }
   if (t.id === 'goto-publish') { tryState.publishOpen = true; return setView('run'); }
   if (t.id === 'set-save') return saveSettings();
+  if (t.id === 'agents-unlock') return agentsGate(true);
+  if (t.id === 'agents-lock') return agentsGate(false);
   if (t.id === 'attach-btn') return $('#attach').click();
 });
 

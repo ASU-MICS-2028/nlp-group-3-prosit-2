@@ -652,7 +652,9 @@ Live at **https://mesorablocks.online** (Role 1 owns this). Published APIs live 
 | HTTPS | Coolify issues the certificate for the main domain. Each published API gets its own Traefik route file (`mesora-<name>.yaml`), so Let's Encrypt issues its certificate on the first visit; no wildcard certificate or DNS API needed |
 | Data | Persistent volume at `/data/workspace` (projects and published snapshots) |
 
-Settings in Coolify: `REQUIREMENTS_AGENT=stub` until there is an API key (see [Signing in to Claude](#signing-in-to-claude)), `PUBLISH_URL=https://{sub}.mesorablocks.online`, `TRAEFIK_DYNAMIC_DIR=/traefik-dynamic` (mounted from `/data/coolify/proxy/dynamic/mesora`), `TRAEFIK_SERVICE_URL=http://mesora-blocks:8000`.
+Settings in Coolify: `REAL_AGENTS_PASSWORD` and `CLAUDE_CODE_OAUTH_TOKEN` (both secrets), `PUBLISH_URL=https://{sub}.mesorablocks.online`, `TRAEFIK_DYNAMIC_DIR=/traefik-dynamic` (mounted from `/data/coolify/proxy/dynamic/mesora`), `TRAEFIK_SERVICE_URL=http://mesora-blocks:8000`.
+
+**Real agents behind a password.** Visitors get the stub agents (a saved example, no model calls). Settings → Agents takes the password and switches that browser session to the real agents, which run on the owner's Claude subscription (`claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN`). This keeps the subscription to the owner's own use: teammates and graders use the stub or run the app locally on their own accounts. Without `REAL_AGENTS_PASSWORD` (e.g. locally) nothing changes. The token is in the gateway's environment; generated code never gets it in its environment, but on the hosted server it runs in the same container (`SANDBOX=local`), so only unlocked sessions should build there.
 
 Traefik only watches the top level of its dynamic folder, so the app writes routes into its own subfolder and a small systemd watcher copies `mesora-*.yaml` files up (and removes them on unpublish). It touches nothing else. Install it once on the server as root:
 

@@ -18,6 +18,7 @@ Every agent has the same shape (shared contract): async def run(state, emit) -> 
 import os
 import shutil
 import tempfile
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -48,6 +49,15 @@ AGENTS = {
     "single": single.run,     # single-agent mode, for the comparison in the evaluation
 }
 
+# Per-job switch to the stub agents. The gateway sets it when the server has a REAL_AGENTS_PASSWORD
+# and the session hasn't entered it, so visitors get the stubs and only the owner runs the real ones.
+use_stubs: ContextVar[bool] = ContextVar("use_stubs", default=False)
+STUBS = {"requirements": stubs.requirements, "architect": stubs.architect, "coder": stubs.coder, "tester": stubs.tester}
+
+
+def agent(name: str):
+    return STUBS[name] if use_stubs.get() and name in STUBS else AGENTS[name]
+
 
 async def step(state: ProjectState, emit: Emit, action: str, detail: str = "") -> None:
     """Write one orchestrator step to the log and show it in the UI."""
@@ -59,7 +69,7 @@ async def step(state: ProjectState, emit: Emit, action: str, detail: str = "") -
 
 async def chat(state: ProjectState, emit: Emit) -> ProjectState:
     """The user sent a message (already added to state.chat)."""
-    state = await AGENTS["requirements"](state, emit)
+    state = await agent("requirements")(state, emit)
     if state.requirements is not None:   # the user confirmed the summary, so move on
         state = await design(state, emit)
     return state
@@ -72,7 +82,7 @@ async def design(state: ProjectState, emit: Emit) -> ProjectState:
     if state.requirements is None:
         raise RuntimeError("Confirm the requirements before designing.")
     await emit(Event(type="status", agent="orchestrator", detail="Designing your API..."))
-    state = await AGENTS["architect"](state, emit)
+    state = await agent("architect")(state, emit)
     # The architect leaves spec_approved = False. Nothing else happens until the user approves.
     return state
 
@@ -102,11 +112,11 @@ async def build(state: ProjectState, emit: Emit, check_queue: Optional[CheckQueu
     await step(state, emit, "plan", f"{len(state.tasks)} build tasks")
 
     # Coder first. Only test code that passed the Coder's own checks.
-    state = await AGENTS["coder"](state, emit)
+    state = await agent("coder")(state, emit)
     if state.build_ok:
         if message := waiting():
             return await redesign(state, emit, *message)
-        state = await AGENTS["tester"](state, emit)
+        state = await agent("tester")(state, emit)
 
     # Fix rounds: the Tester's failure report sends the Coder back in (self-reflection),
     # but only MAX_FIX_ROUNDS times, so it can never loop forever.
@@ -147,7 +157,7 @@ async def build_single(state: ProjectState, emit: Emit) -> ProjectState:
     if state.requirements is None:
         raise RuntimeError("Confirm the requirements before building.")
     await step(state, emit, "build_single", "Single-agent build started")
-    state = await AGENTS["single"](state, emit)
+    state = await agent("single")(state, emit)
     write_log(state)
     return state
 
@@ -176,7 +186,7 @@ async def fix_round(state: ProjectState, emit: Emit) -> ProjectState:
     with tempfile.TemporaryDirectory() as tmp:
         backup = Path(tmp) / "app"
         shutil.copytree(app, backup)                    # keep a copy of the last working code
-        state = await AGENTS["coder"](state, emit)      # the Coder reads state.test_report
+        state = await agent("coder")(state, emit)      # the Coder reads state.test_report
 
         if not state.build_ok:                          # the fix broke the build: undo it
             shutil.rmtree(app, ignore_errors=True)
@@ -187,7 +197,7 @@ async def fix_round(state: ProjectState, emit: Emit) -> ProjectState:
             await step(state, emit, "restored", "The fix broke the build, so the last working code was kept")
             return state
 
-    return await AGENTS["tester"](state, emit)
+    return await agent("tester")(state, emit)
 
 
 def write_log(state: ProjectState) -> None:

@@ -253,3 +253,28 @@ def test_changes_keep_earlier_versions_in_order(client):
     rounds = client.post("/api/projects/open", json={"slug": slug}).json()["rounds"]   # saved with the project
     assert [r["request"] for r in rounds] == ["Add a waiting list", "And reminders"]
     assert rounds[1]["build"] is None                                # version 2 was never approved and built
+
+
+def test_password_switches_a_session_to_the_real_agents(client, monkeypatch):
+    """With REAL_AGENTS_PASSWORD set, visitors get the stub agents; a session with the password gets the real ones."""
+    from agents import orchestrator
+    from core.state import Message
+
+    async def real(state, emit):
+        state.chat.append(Message(role="assistant", content="real agent"))
+        return state
+    monkeypatch.setitem(orchestrator.AGENTS, "requirements", real)
+    monkeypatch.setenv("REAL_AGENTS_PASSWORD", "open sesame")
+
+    assert client.get("/api/settings").json()["model"] == "stub agents"
+    client.post("/api/chat", json={"text": "I run a clinic"})
+    assert wait_idle(client)["state"]["chat"][-1]["content"] != "real agent"     # locked: the stub answered
+
+    assert client.post("/api/agents/unlock", json={"password": "wrong"}).status_code == 403
+    assert client.post("/api/agents/unlock", json={"password": "open sesame"}).json()["unlocked"]
+    client.post("/api/chat", json={"text": "Patients and staff"})
+    assert wait_idle(client)["state"]["chat"][-1]["content"] == "real agent"     # unlocked: the real one
+
+    from server.app import app
+    assert not TestClient(app).get("/api/settings").json()["unlocked"]            # other browsers stay locked
+    assert not client.post("/api/agents/lock").json()["unlocked"]

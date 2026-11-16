@@ -12,6 +12,7 @@ routes requests by Host header, so locally http://<name>.localhost:8000 works wi
 setup, and hosted it needs one wildcard DNS record pointing at this server.
 """
 import asyncio
+import hmac
 import io
 import json
 import mimetypes
@@ -67,6 +68,7 @@ class Session:
         self.busy: Optional[str] = None     # label of the running job
         self.error: Optional[str] = None
         self.user_name = "You"
+        self.unlocked = False               # entered REAL_AGENTS_PASSWORD: this session runs the real agents
         self.server = None                  # handle of the running generated API
         self.task: Optional[asyncio.Task] = None
         self.listeners: set[asyncio.Queue] = set()
@@ -156,6 +158,7 @@ def _job(s: Session, label: str, fn) -> dict:
     if s.busy:
         raise HTTPException(409, f"Busy: {s.busy}")
     s.busy, s.error = label, None
+    orchestrator.use_stubs.set(stubbed(s))   # the task below copies this context
 
     async def work():
         await s.emit(Event(type="status", detail=label))
@@ -690,9 +693,39 @@ class Settings(BaseModel):
     user_name: Optional[str] = None
 
 
+def stubbed(s: Session) -> bool:
+    """With REAL_AGENTS_PASSWORD set, only sessions that entered it run the real agents."""
+    return bool(os.getenv("REAL_AGENTS_PASSWORD")) and not s.unlocked
+
+
 def _settings(s: Session) -> dict:
-    return {"model": os.getenv("LLM_MODEL", "stub agents"), "sandbox": os.getenv("SANDBOX", "docker"),
-            "user_name": s.user_name}
+    return {"model": "stub agents" if stubbed(s) else os.getenv("LLM_MODEL", "stub agents"),
+            "sandbox": os.getenv("SANDBOX", "docker"), "user_name": s.user_name,
+            "gate": bool(os.getenv("REAL_AGENTS_PASSWORD")), "unlocked": s.unlocked}
+
+
+class Password(BaseModel):
+    password: str
+
+
+@app.post("/api/agents/unlock")
+async def unlock(body: Password, request: Request):
+    """Switch this browser session to the real agents. Wrong passwords wait a second."""
+    s, secret = sess(request), os.getenv("REAL_AGENTS_PASSWORD", "")
+    if not secret:
+        raise HTTPException(409, "This server has no password: it already runs the agents it is set up with")
+    if not hmac.compare_digest(body.password.encode(), secret.encode()):
+        await asyncio.sleep(1)   # ponytail: per request, not per IP; enough for a class demo
+        raise HTTPException(403, "Wrong password")
+    s.unlocked = True
+    return _settings(s)
+
+
+@app.post("/api/agents/lock")
+def lock(request: Request):
+    s = sess(request)
+    s.unlocked = False
+    return _settings(s)
 
 
 @app.get("/api/settings")
