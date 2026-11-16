@@ -1,0 +1,33 @@
+{
+  "project_name": "Personal Tasks",
+  "description": "A to-do list where each person manages their own tasks.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Task",
+      "description": "Something to do.",
+      "fields": [
+        {"name": "title", "type": "str"},
+        {"name": "due_date", "type": "date", "required": false},
+        {"name": "done", "type": "bool", "read_only": true, "description": "false at first; set by completing"},
+        {"name": "user_id", "type": "int", "read_only": true, "description": "the owner, from the X-User-Id header"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/tasks", "summary": "Add a task", "entity": "Task", "access": "user", "request_fields": ["title", "due_date"], "status_code": 201},
+    {"method": "GET", "path": "/tasks", "summary": "List the caller's tasks (all tasks for an admin)", "entity": "Task", "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/tasks/{id}", "summary": "Get a task", "entity": "Task", "access": "user", "status_code": 200},
+    {"method": "PATCH", "path": "/tasks/{id}", "summary": "Change a task", "entity": "Task", "access": "user", "request_fields": ["title", "due_date"], "status_code": 200},
+    {"method": "POST", "path": "/tasks/{id}/complete", "summary": "Mark a task as done", "entity": "Task", "access": "user", "status_code": 200},
+    {"method": "DELETE", "path": "/tasks/{id}", "summary": "Delete a task", "entity": "Task", "access": "user", "status_code": 204}
+  ],
+  "rules": [
+    "user_id is set from the X-User-Id header when the task is created.",
+    "A user can get, change, complete and delete only their own tasks; another user's task returns 403. An admin can access every task.",
+    "GET /tasks returns only the caller's own tasks for a user, and every task for an admin.",
+    "A new task has done false; completing it sets done to true.",
+    "Completing a task that is already done returns 409.",
+    "title cannot be empty; reject with 422."
+  ]
+}

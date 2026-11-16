@@ -1,0 +1,24 @@
+{
+  "project_name": "School Grades",
+  "description": "A school records each student's score in each subject and shows averages.",
+  "users": [
+    "students",
+    "teachers"
+  ],
+  "data": [
+    "students with full name and student number (unique)",
+    "subjects with a name (unique)",
+    "grades: a student's score in a subject"
+  ],
+  "actions": [
+    "teachers add students and subjects",
+    "anyone can see the subjects",
+    "teachers record and correct grades",
+    "teachers see all students and grades",
+    "students view a student record and the student's average"
+  ],
+  "rules": [
+    "a score is between 0 and 100",
+    "a student has only one grade per subject"
+  ]
+}

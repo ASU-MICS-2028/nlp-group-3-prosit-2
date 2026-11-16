@@ -1,0 +1,25 @@
+{
+  "project_name": "Pet Adoption",
+  "description": "An animal shelter lists pets and handles applications to adopt them.",
+  "users": [
+    "people who want to adopt",
+    "shelter staff"
+  ],
+  "data": [
+    "pets with a name, a species and whether the pet has been adopted",
+    "applications to adopt a pet with the applicant's name and a status (pending, approved or rejected)"
+  ],
+  "actions": [
+    "staff add pets",
+    "anyone can see the pets",
+    "people apply to adopt a pet",
+    "people view an application",
+    "staff approve or reject an application",
+    "staff see all applications"
+  ],
+  "rules": [
+    "nobody can apply for a pet that is already adopted",
+    "approving an application marks the pet as adopted and rejects the other applications for that pet",
+    "an application can only be decided once"
+  ]
+}

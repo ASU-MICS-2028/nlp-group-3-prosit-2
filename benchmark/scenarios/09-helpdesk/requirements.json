@@ -1,0 +1,23 @@
+{
+  "project_name": "IT Helpdesk",
+  "description": "Staff report IT problems and the support team works through them.",
+  "users": [
+    "staff who report problems",
+    "the support team"
+  ],
+  "data": [
+    "issues with a title, a description, a priority (low, medium or high) and a status (open, in progress or resolved)"
+  ],
+  "actions": [
+    "staff report an issue",
+    "staff see all issues and a single issue",
+    "staff edit an issue",
+    "the support team starts work on an issue",
+    "the support team resolves an issue",
+    "staff reopen a resolved issue"
+  ],
+  "rules": [
+    "an issue goes from open to in progress to resolved, and a resolved issue can be reopened",
+    "the priority must be low, medium or high"
+  ]
+}

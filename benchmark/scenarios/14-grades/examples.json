@@ -1,0 +1,5 @@
+{
+  "Student": {"create": {"full_name": "Kojo Antwi", "student_number": "S-2031-001"}},
+  "Subject": {"create": {"name": "Mathematics"}},
+  "Grade": {"create": {"score": 72.5}, "update": {"score": 80.0}}
+}

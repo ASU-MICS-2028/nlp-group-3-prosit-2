@@ -271,7 +271,16 @@ async def _build(s: Session) -> None:
     d = _project_dir(s)
     d.mkdir(parents=True, exist_ok=True)
     s.state.workspace = str(d)
-    s.state = await orchestrator.build(s.state, s.emit)
+
+    def check_queue():
+        """Messages typed during the build, for the orchestrator to send to the Architect."""
+        if not s.queued:
+            return None
+        text, s.queued = "\n\n".join(s.queued), []
+        s.revisions.append(text)
+        return text, mentions(s, text)
+
+    s.state = await orchestrator.build(s.state, s.emit, check_queue=check_queue)
 
 
 MENTION_RE = re.compile(r"(?:^|\s)@([\w./-]+)")

@@ -49,7 +49,7 @@ DESCRIPTION = "Submit the complete API spec. If it has problems, you get them ba
 
 def make_prompt(state: ProjectState) -> str:
     prompt = "<requirements>\n" + state.requirements.model_dump_json(indent=1) + "\n</requirements>\n"
-    if state.change_request and state.spec:   # the user asked for a change on the approval screen
+    if state.change_request and state.spec:   # the user asked for a change (approval screen or mid-build)
         mentions = ""
         if state.change_files:
             mentions = "\nThe person specifically pointed at these files:\n" + "\n".join(f"- {f}" for f in state.change_files)
@@ -147,7 +147,7 @@ async def run(state: ProjectState, emit: Emit, runner=run_agent) -> ProjectState
     action = "change" if state.change_request else "spec"
     state.spec = spec
     state.spec_approved = False     # a new or changed spec always needs the user's approval
-    state.change_request = None
+    # change_request stays set: the Coder needs the user's words too. build() clears it once applied.
     state.logs.append(LogEntry(agent="architect", action=action, seconds=seconds,
                                tokens=usage.get("tokens", 0), cost_usd=usage.get("cost_usd", 0.0),
                                detail=f"{len(spec.entities)} entities, {len(spec.endpoints)} endpoints"))

@@ -1,0 +1,30 @@
+{
+  "project_name": "Guest House Bookings",
+  "description": "A guest house takes room bookings and handles check-in and check-out.",
+  "users": [
+    "guests",
+    "reception staff"
+  ],
+  "data": [
+    "rooms with a room number (unique), a nightly rate and the most guests the room takes",
+    "bookings of a room with the guest's name, number of guests, check-in date, check-out date, the total price and a status (booked, checked in, checked out or cancelled)"
+  ],
+  "actions": [
+    "staff add rooms and change their rate",
+    "anyone can see the rooms",
+    "guests book a room",
+    "guests view a booking",
+    "guests change the dates or number of guests of a booking",
+    "guests cancel a booking",
+    "staff check guests in and out",
+    "staff see all bookings"
+  ],
+  "rules": [
+    "a room cannot be booked twice for the same nights",
+    "the group must fit in the room",
+    "check-out must be after check-in and bookings cannot start in the past",
+    "the total is the number of nights times the nightly rate",
+    "only a booking that has not started can be changed or cancelled",
+    "guests are checked in, then checked out"
+  ]
+}

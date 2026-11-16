@@ -1,0 +1,6 @@
+{
+  "Patient": {"create": {"full_name": "Ama Mensah", "phone": "0244000001", "email": "ama@example.com", "date_of_birth": "1990-05-17"}},
+  "Doctor": {"create": {"full_name": "Dr Kofi Boateng", "specialty": "general practice", "phone": "0302000001"},
+             "update": {"specialty": "paediatrics"}},
+  "Appointment": {"create": {"start_time": "2031-03-10T09:00:00", "reason": "check-up"}}
+}

@@ -297,6 +297,8 @@ async def run(state: ProjectState, emit: Emit, runner=run_agent) -> ProjectState
     state.test_report = None if final["ok"] else as_text(state.failures)
 
     action = "retest" if retest else "run_tests"
+    if state.failures:   # keep what failed in the step log: state.failures is emptied once the Coder fixes it
+        state.logs.append(LogEntry(agent="tester", action="failures", detail=state.test_report))
     state.logs.append(LogEntry(agent="tester", action=action, detail=final["summary"],
                                seconds=round(time.time() - start, 2),
                                tokens=usage.get("tokens", 0), cost_usd=usage.get("cost_usd", 0.0)))

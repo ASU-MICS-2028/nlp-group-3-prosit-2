@@ -1,0 +1,4 @@
+{
+  "Table": {"create": {"label": "T1", "seats": 4}},
+  "Reservation": {"create": {"guest_name": "Kwame Addo", "party_size": 2, "starts_at": "2031-05-05T18:00:00"}}
+}

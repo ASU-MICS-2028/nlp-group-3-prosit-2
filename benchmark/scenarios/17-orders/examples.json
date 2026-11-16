@@ -1,0 +1,5 @@
+{
+  "Product": {"create": {"name": "Rice 5kg", "price": 85.0, "stock": 30}},
+  "Order": {"create": {}},
+  "OrderItem": {"create": {"quantity": 2}}
+}

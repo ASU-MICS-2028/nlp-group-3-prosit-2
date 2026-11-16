@@ -1,0 +1,4 @@
+{
+  "Product": {"create": {"name": "Gari 1kg", "price": 12.5, "stock": 40}, "update": {"price": 14.0}},
+  "Order": {"create": {"quantity": 2}}
+}

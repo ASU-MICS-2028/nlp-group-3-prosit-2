@@ -141,3 +141,73 @@ def test_chat_designs_only_after_the_user_confirms(monkeypatch):
     monkeypatch.setitem(O.AGENTS, "requirements", confirmed)
     st = asyncio.run(O.chat(ProjectState(), emit))
     assert calls == ["architect"] and st.spec == SPEC and not st.spec_approved
+
+
+def test_change_request_reaches_the_coder_and_is_cleared_after_the_build(tmp_path, monkeypatch):
+    fake_agents(monkeypatch, tests_pass=[True])
+    seen = []
+    coder = O.AGENTS["coder"]
+
+    async def watching_coder(state, emit):
+        seen.append((state.change_request, list(state.change_files)))
+        return await coder(state, emit)
+
+    monkeypatch.setitem(O.AGENTS, "coder", watching_coder)
+    st = approved(tmp_path)
+    st.change_request, st.change_files = "Add notes to Patient", ["app/main.py"]
+    st = asyncio.run(O.build(st, emit))
+    assert seen == [("Add notes to Patient", ["app/main.py"])]    # the Coder got the user's words
+    assert st.change_request is None and st.change_files == []    # applied, so the next build starts clean
+
+
+def test_change_request_survives_a_failed_build(tmp_path, monkeypatch):
+    fake_agents(monkeypatch, tests_pass=[], coder_breaks=(0,))
+    st = approved(tmp_path)
+    st.change_request = "Add notes to Patient"
+    st = asyncio.run(O.build(st, emit))
+    assert not st.build_ok and st.change_request == "Add notes to Patient"   # a rebuild still knows the change
+
+
+def queue_after(calls, agent, text, files=()):
+    """check_queue that has a message once `agent` has run (as if the user typed it meanwhile)."""
+    sent = []
+
+    def check_queue():
+        if agent in calls and not sent:
+            sent.append(text)
+            return text, list(files)
+        return None
+    return check_queue
+
+
+def test_message_during_the_coder_stops_before_testing(tmp_path, monkeypatch):
+    calls = fake_agents(monkeypatch, tests_pass=[True])
+    check = queue_after(calls, "coder", "Add notes to Patient", ["app/main.py"])
+    st = asyncio.run(O.build(approved(tmp_path), emit, check_queue=check))
+    assert calls == ["coder", "architect"]                     # not tested: the spec is changing
+    assert not st.spec_approved and st.result is None          # back to the approval screen
+    assert st.change_request == "Add notes to Patient" and st.change_files == ["app/main.py"]   # kept for the Coder
+    assert any(l.action == "change" for l in st.logs if l.agent == "orchestrator")
+    assert (tmp_path / "steps.jsonl").exists()
+
+
+def test_message_during_failing_tests_stops_before_the_fix_round(tmp_path, monkeypatch):
+    calls = fake_agents(monkeypatch, tests_pass=[False, True])
+    check = queue_after(calls, "tester", "Doctors can see all bookings")
+    st = asyncio.run(O.build(approved(tmp_path), emit, check_queue=check))
+    assert calls == ["coder", "tester", "architect"]           # no fix round for the old spec
+    assert not st.spec_approved
+
+
+def test_a_build_that_passed_is_delivered_even_with_a_message_waiting(tmp_path, monkeypatch):
+    calls = fake_agents(monkeypatch, tests_pass=[True])
+    check = queue_after(calls, "tester", "Add notes to Patient")
+    st = asyncio.run(O.build(approved(tmp_path), emit, check_queue=check))
+    assert calls == ["coder", "tester"] and st.result is not None and st.spec_approved
+    assert check() == ("Add notes to Patient", [])            # still waiting: the gateway sends it after
+
+
+def test_no_message_no_change(tmp_path, monkeypatch):
+    calls = fake_agents(monkeypatch, tests_pass=[False, True])
+    st = asyncio.run(O.build(approved(tmp_path), emit, check_queue=lambda: None))
+    assert calls == ["coder", "tester", "coder", "tester"] and st.tests_ok

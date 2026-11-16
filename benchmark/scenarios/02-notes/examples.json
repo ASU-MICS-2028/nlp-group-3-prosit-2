@@ -1,0 +1,3 @@
+{
+  "Note": {"create": {"title": "Shopping", "body": "milk, bread", "pinned": true}, "update": {"title": "Shopping list", "pinned": false}}
+}
