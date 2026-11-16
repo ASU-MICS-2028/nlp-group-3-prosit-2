@@ -19,12 +19,16 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from typing import Callable, Optional
 
 from agents import architect, coder, requirements, single, tester
 from core.events import Emit, Event
 from core.spec import Spec
 from core.state import BuildResult, LogEntry, ProjectState
 from server import stubs
+
+# Gives the messages the user typed during a build, as (text, @mentioned files), or None.
+CheckQueue = Callable[[], Optional[tuple[str, list[str]]]]
 
 MAX_FIX_ROUNDS = int(os.getenv("MAX_FIX_ROUNDS", "1"))
 
@@ -75,14 +79,23 @@ async def design(state: ProjectState, emit: Emit) -> ProjectState:
 
 # ---------- 3. build ----------
 
-async def build(state: ProjectState, emit: Emit) -> ProjectState:
-    """Coder writes the code, Tester tests it, failures go back to the Coder."""
+async def build(state: ProjectState, emit: Emit, check_queue: Optional[CheckQueue] = None) -> ProjectState:
+    """Coder writes the code, Tester tests it, failures go back to the Coder.
+
+    Mid-build messages: before each step that would still follow (testing, a fix round), check_queue()
+    gives what the user typed meanwhile, as (text, @mentioned files). If there is something, the build
+    stops and the Architect revises the spec with it as the change request; the user approves again.
+    A build that already passed its tests is always delivered: a message typed during the last step
+    is sent as a change request after it (the gateway does that when the job ends)."""
     if not state.spec_approved:   # human-in-the-loop: no code before the user approves the spec
         raise RuntimeError("Approve the spec before building.")
     await emit(Event(type="status", agent="orchestrator", detail="Building your API..."))
     state.build_ok, state.tests_ok, state.test_report, state.test_summary, state.test_results = False, None, None, "", []
     state.failures, state.result = [], None
     await step(state, emit, "build", "Build started")
+
+    def waiting() -> Optional[tuple[str, list[str]]]:
+        return check_queue() if check_queue else None
 
     # Decomposition: split the approved spec into small tasks the Coder works through one by one.
     state.tasks = plan_tasks(state.spec)
@@ -91,12 +104,16 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
     # Coder first. Only test code that passed the Coder's own checks.
     state = await AGENTS["coder"](state, emit)
     if state.build_ok:
+        if message := waiting():
+            return await redesign(state, emit, *message)
         state = await AGENTS["tester"](state, emit)
 
     # Fix rounds: the Tester's failure report sends the Coder back in (self-reflection),
     # but only MAX_FIX_ROUNDS times, so it can never loop forever.
     rounds = 0
     while state.build_ok and state.tests_ok is False and rounds < MAX_FIX_ROUNDS:
+        if message := waiting():   # no point fixing code for a spec that is about to change
+            return await redesign(state, emit, *message)
         rounds += 1
         await step(state, emit, "fix_round", f"Fix round {rounds} of {MAX_FIX_ROUNDS}")
         state = await fix_round(state, emit)
@@ -104,9 +121,21 @@ async def build(state: ProjectState, emit: Emit) -> ProjectState:
     # The BuildResult: what the user gets. The gateway adds base_url and docs_url when it starts the API.
     state.result = BuildResult(endpoints=[f"{e.method} {e.path}" for e in state.spec.endpoints],
                                test_summary=state.test_summary, known_failures=state.failures)
+    if state.build_ok:   # the change request is now in the code; the next build starts clean
+        state.change_request, state.change_files = None, []
     write_log(state)
     await emit(Event(type="result", agent="orchestrator", detail="Build finished",
                      data={"build_ok": state.build_ok, "tests_ok": state.tests_ok}))
+    return state
+
+
+async def redesign(state: ProjectState, emit: Emit, text: str, files: list[str]) -> ProjectState:
+    """A message arrived mid-build: stop, and send it to the Architect as a change request.
+    The revised spec goes back to the approval screen (the Architect leaves spec_approved False)."""
+    state.change_request, state.change_files = text, files
+    await step(state, emit, "change", f"Build stopped for your message: {text[:200]}")
+    state = await design(state, emit)
+    write_log(state)
     return state
 
 
@@ -163,5 +192,7 @@ async def fix_round(state: ProjectState, emit: Emit) -> ProjectState:
 
 def write_log(state: ProjectState) -> None:
     """Save every step (all agents) as JSON Lines in the project folder, for evaluation (Role 4)."""
+    if not state.workspace:
+        return
     lines = [entry.model_dump_json() + "\n" for entry in state.logs]
     (Path(state.workspace) / "steps.jsonl").write_text("".join(lines))

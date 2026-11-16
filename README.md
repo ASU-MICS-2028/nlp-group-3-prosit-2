@@ -79,6 +79,10 @@ The project menu at the top switches between generated projects, and **Download 
 
 ## Architecture
 
+![How Mesora Blocks turns a description into a running API](docs/architecture.png)
+
+For slides and the report: [`docs/architecture.svg`](docs/architecture.svg) (scales to any size) or [`docs/architecture.png`](docs/architecture.png) (3200×1800, for Google Slides). The overview below includes the Docker sandbox, which is still being built (Role 3).
+
 ```mermaid
 flowchart LR
     U["User (browser)"] -->|"HTTP + live events"| G["Gateway (FastAPI)"]
@@ -117,7 +121,7 @@ flowchart LR
 6. **Fix.** The failure report sends the Coder back into its loop (`MAX_FIX_ROUNDS`, default 1). The Coder cannot edit `tests/`. If a fix round breaks the build, the last working code is restored and the known failures are reported honestly.
 7. **Deliver.** The orchestrator starts the API in the serve sandbox and returns a `BuildResult`: base URL, docs URL, endpoint list, test summary and any known failures.
 
-Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). Today the gateway sends them, joined into one message, when the running job ends: before a spec they go to the Requirements agent, after it they are a change request. Routing them sooner, after the current agent step, is Role 2's.
+Messages the user sends during a build are queued and shown in the chat ("I'll read this when I'm done"). The orchestrator looks at the queue between agent steps, whenever more work would follow: before the Tester, and before each fix round. If something is waiting, it stops the build and sends the messages (joined into one, `@` mentions included) to the Architect as a change request; the revised spec goes back to the approval screen. A build that already passed its tests is always delivered first, and a message typed during its last step is sent as a change request right after. Any message counts as a change request, including a question or a thank-you; telling them apart is a possible improvement. Outside a build, queued messages are sent when the running job ends: before a spec they go to the Requirements agent, after it they are a change request.
 
 ### Change requests and `@` mentions
 
@@ -128,7 +132,7 @@ After the spec exists, everything the user types is a **change request**. The us
 | `state.change_request` | gateway | The user's words, unchanged (mentions included) |
 | `state.change_files` | gateway | The `@`-mentioned paths that really exist in the workspace, in order, no duplicates (e.g. `["app/main.py"]`). Unknown names and email addresses are ignored. |
 
-The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). A new change request overwrites both fields.
+The Architect revises the spec from `change_request`. The user approves the new spec, and the Coder applies it (see the Role 3 checklist). Both fields stay set until a build that passes the Coder's checks, so the Coder (and its fix rounds) see the user's words; then the orchestrator clears them. A new change request overwrites both fields.
 
 ### Inside each agent
 
@@ -158,41 +162,20 @@ options = ClaudeAgentOptions(
 )
 ```
 
-### Benchmark scenarios and hidden tests
+### Schema check (Schemathesis)
 
-`benchmark/scenarios/` holds 20 small projects. Fifteen are everyday ones, from a one-table notebook to bookings with overlap rules: clinic, notes, to-do, library, shop, courses, expenses, events, helpdesk, restaurant, car rentals, polls, savings wallet, school grades, pet adoption. Five are harder on purpose, with rules that interact: guest house bookings, multi-item orders, staff leave, warehouse stock, project tasks.
-
-| File | What it is |
-| --- | --- |
-| `requirements.json` | What the person asked for: the input of a full run |
-| `spec.json` | The reference spec: the input when only the Coder and Tester are measured, and what the Architect's spec is compared with |
-| `examples.json` | One valid body per entity, so the generic hidden tests can create records |
-| `rules.py` | Hidden tests for this scenario's business rules |
-
-**Hidden tests are the judge, and no agent ever sees them.** The Tester's own tests decide the fix rounds; the hidden tests decide the score. `benchmark.judge(scenario, app)` copies the built `app/` to a temporary folder and runs three files there: the contract tests (from the spec), `benchmark/generic_tests.py` (the same checks for every scenario: create, read, update, delete, 404, 409, 422) and the scenario's `rules.py`. The score is tests passed / tests run.
+The Tester's tests try the inputs a person would think of. `agents/schema_check.py` does the opposite: Schemathesis reads the built API's own OpenAPI document and generates many requests for every endpoint (missing fields, wrong types, empty strings, huge numbers). One property must hold for all of them: **the API always answers and never crashes**. A refusal (401, 404, 409, 422) is a correct answer; a 500 or an uncaught exception is a failure.
 
 ```python
-import asyncio, benchmark
-
-scenario = benchmark.load("05-shop")
-verdict = asyncio.run(benchmark.judge(scenario, workspace / "app"))   # {"passed": 50, "total": 50, "score": 1.0, ...}
+result = await schema_check.check(Path(workspace) / "app")
+result["summary"]   # "6 of 13 endpoints crashed on generated input"
+result["crashes"]   # [{"endpoint": "GET /doctors/{id}", "request": "GET /doctors/9223372036854775808", "error": "OverflowError: ..."}]
+schema_check.as_failures(result)   # the same crashes as Failure objects, for the Coder
 ```
 
-`tests/test_benchmark.py` checks every scenario offline: the spec passes the Architect's own checks, the examples match it, the rule tests only call endpoints the spec has, and on the golden clinic the hidden tests pass and catch six planted bugs.
+No model is involved, so it is free to run, and the same app always gives the same result. For each endpoint that crashes, the smallest request that still crashes it is reported. It is a separate check for now: nothing in the build calls it.
 
-### Running the evaluation
-
-`eval/run.py` builds every scenario from its reference spec, judges the result with the hidden tests, and adds one row per build to `eval/results/results.csv`. **It makes real model calls.**
-
-```bash
-python -m eval.run --label team                       # Coder -> Tester -> fix rounds, all scenarios
-python -m eval.run --label no-tester --system coder   # the Coder alone
-RAG=off python -m eval.run --label no-rag             # the team without search_patterns
-LLM_MODEL=claude-sonnet-5-5 python -m eval.run --label sonnet
-python -m eval.run --summary                          # print the table, run nothing
-```
-
-Each row has the hidden-test score, whether every hidden test passed, the Tester's verdict, the number of fix rounds, and tokens, cost and time. A row is written as soon as its build finishes, and running a label again skips what is already in the file, so a run can be stopped and continued. `--repeat 3` builds each scenario three times, because the same model does not write the same code twice.
+First finding: every API the Coder has built so far crashes when an id is larger than SQLite can store (`9223372036854775808`), on about half of its endpoints. No hand-written or model-written test had tried that. The fix belongs in the Coder's conventions (limit ids, or answer 404).
 
 ### Key decisions
 
@@ -368,10 +351,13 @@ PUBLISH_URL=http://{sub}.localhost:8000   # where published APIs live; hosted: h
 
 ```bash
 python -m server                            # web app at http://localhost:8000 (stub agents for now)
-python run.py --golden clinic               # full pipeline on the golden example
-python run.py "I run a small clinic..."     # full pipeline from a prompt, in the terminal
-python run.py --stop-all                    # stop every running generated API
+python run.py --golden clinic               # full pipeline on the golden example (real agents)
+python run.py --golden clinic --stub        # the same, offline: stub agents replay the golden example
+python run.py "I run a small clinic..."     # full pipeline from a prompt, you answer in the terminal
+python run.py --golden clinic --serve       # keep the API running at the end (Ctrl+C stops it)
 ```
+
+`--golden` answers the Requirements agent with the golden user turns, in order, and approves the summary and the spec. It ends with a summary per agent (steps, tokens, cost, seconds) and the generated spec compared with the golden one. Everything is saved in `workspace/<name>-<time>/`: `app/`, `tests/`, `steps.jsonl`, `state.json` and `summary.json`. Exit code 0 only when the checks and all tests pass.
 
 ### Test
 
@@ -379,6 +365,7 @@ python run.py --stop-all                    # stop every running generated API
 pytest                                      # offline: no API calls, agents use recorded replies
 pytest -m live                              # real API calls (costs money)
 python -m eval.benchmark --out results/run.csv
+python -m eval.spec_compare workspace/<run>/state.json golden/clinic/spec.json --csv results/specs.csv
 ```
 
 ### Signing in to Claude
@@ -434,8 +421,8 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Publish hardening: public traffic through the serve sandbox, real sign-in, per-user limits
 
 **Connect**
-- [ ] Gateway ↔ orchestrator (with Role 2)
-- [ ] Agree the event format (with Roles 2 and 3)
+- [x] Gateway ↔ orchestrator (with Role 2)
+- [x] Agree the event format (with Roles 2 and 3)
 
 **Evaluate**
 - [ ] Usability test with 3–5 non-developers (SUS scores)
@@ -454,18 +441,18 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] Stop rules: max fix rounds, restore last working code
 - [x] Architect agent on the SDK with `submit_spec` validating against the schema (`agents/architect.py`)
 - [x] Split the spec into build tasks for the Coder (`plan_tasks()`)
-- [ ] Route change requests (from the approval screen and mid-build messages) back to the Architect: approval screen done; mid-build messages not yet
+- [x] Route change requests (from the approval screen and mid-build messages) back to the Architect (`orchestrator.build(check_queue=...)`, `redesign()`)
 - [x] Single-agent mode (one SDK session does everything) for comparison (`agents/single.py`, `orchestrator.build_single()`)
 - [x] Write every step to a JSONL log (`<project>/steps.jsonl`)
 
 **Connect**
-- [ ] Wire all agents (with Roles 1 and 3)
-- [ ] Full pipeline run on the golden example
+- [x] Wire all agents (with Roles 1 and 3): requirements → architect → coder ⇄ tester; change requests reach the Coder
+- [x] Full pipeline run on the golden example (`python run.py --golden clinic`)
 
 **Evaluate**
-- [ ] Compare generated specs with reference specs
-- [ ] Hand logs to Role 4
-- [ ] Architecture diagram for Section B and slides
+- [x] Compare generated specs with reference specs (`eval/spec_compare.py`; `run.py --golden` prints it)
+- [x] Hand logs to Role 4 (`python -m eval.export_logs` → `results/runs.csv`, `results/steps.csv`; columns in `eval/README.md`)
+- [x] Architecture diagram for Section B and slides (`docs/architecture.svg`, `docs/architecture.png`)
 
 ### Role 3: Coder & Sandbox
 
@@ -479,15 +466,15 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [ ] Block outbound network for the serve sandbox
 - [x] Coder agent on the SDK: prompt with layout and SQLite conventions (`agents/coder.py`)
 - [x] Coder always adds `GET /health` (checks the database when there is one); `run_checks` fails without it
-- [ ] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
+- [x] Permissions: disable `Bash`/`WebFetch`/`WebSearch`, `PreToolUse` path hook
 - [x] Custom tools: `run_checks`, `finish_build` (finish gate)
 - [x] Check the generated OpenAPI matches the spec (every spec method + path is served)
-- [ ] Change requests: when `state.change_request` is set, change only what it asks for and keep the rest of the working code. Open the files in `state.change_files` first: the user pointed at them. See [Change requests and `@` mentions](#change-requests-and--mentions).
+- [x] Change requests: when `state.change_request` is set, change only what it asks for and keep the rest of the working code. Open the files in `state.change_files` first: the user pointed at them. See [Change requests and `@` mentions](#change-requests-and--mentions).
 - [ ] Stretch: MCP server exposing the finished API's spec
 - [ ] Document security risks and mitigations
 
 **Connect**
-- [ ] Coder ⇄ Tester failure-report loop (with Role 4)
+- [x] Coder ⇄ Tester failure-report loop (with Role 4)
 - [x] Coder ↔ orchestrator (with Role 2): `CODER_AGENT=stub` still replays the golden code
 
 **Evaluate**
@@ -505,15 +492,15 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 **Build**
 - [x] Tester agent on the SDK: tests from the spec, writes only `tests/`, `run_tests`, `submit_report`
 - [x] Contract tests always check `GET /health` → `200 {"status": "ok"}` without auth
-- [ ] Agree the failure-report format with Role 3
+- [x] Agree the failure-report format with Role 3
 - [ ] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
 - [ ] `search_patterns` tool for the Coder
-- [ ] Spec checking with Schemathesis
-- [x] Evaluation script that saves results to CSV (`python -m eval.run`)
+- [x] Spec checking with Schemathesis (`agents/schema_check.py`; a separate check, not yet part of the build)
+- [ ] Evaluation script that saves results to CSV
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)
 
 **Connect**
-- [ ] Tester ⇄ Coder loop (with Role 3)
+- [x] Tester ⇄ Coder loop (with Role 3)
 
 **Evaluate**
 - [ ] Run the benchmark on the full system
@@ -558,10 +545,10 @@ Fill in the dates once the deadline is confirmed.
 - [ ] Confirm the deadline and fill in milestone dates
 - [ ] Day 1 agreements merged
 - [ ] Golden example updated to SQLite
-- [ ] Walking skeleton runs end to end
+- [x] Walking skeleton runs end to end
 - [ ] Each part runs alone on the golden example
-- [ ] Pairs connected
-- [ ] Full pipeline runs end to end
+- [x] Pairs connected
+- [x] Full pipeline runs end to end
 - [ ] Benchmark results ready
 - [ ] Usability test done
 - [ ] Security checklist done
