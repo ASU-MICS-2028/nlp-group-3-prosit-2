@@ -714,18 +714,20 @@ async function sendTry() {
 
 // settings
 async function renderSettings() {
-  if (!settings) settings = await api('/api/settings').catch(() => null);
+  settings = await api('/api/settings').catch(() => settings);   // always fresh: a deploy can add the password gate
   if (!settings) return;
   $('#view-settings').innerHTML = `
     <div class="panel-head">Settings</div>
     <div class="panel-body"><div class="settings">
       <div class="card"><h4>Agents</h4>
-        ${!settings.gate ? `<p>Set by whoever runs the server (<code>LLM_MODEL</code> and <code>SANDBOX</code> in <code>.env</code>).</p>`
+        ${!settings.gate ? `<p>This server has no password set, so every session here uses the agents it is set up with
+            (<code>LLM_MODEL</code> and <code>SANDBOX</code> in <code>.env</code>). The password box appears on servers with <code>REAL_AGENTS_PASSWORD</code>, like the hosted site.</p>`
           : settings.unlocked ? `<p>Real agents are on for this browser session.</p>
             <div class="row" style="margin-top:12px"><button class="btn" id="agents-lock">${icon('x')}Back to demo agents</button></div>`
           : `<p>This server runs demo agents that replay a saved example. Enter the password to build with the real agents.</p>
-            <div class="row" style="margin-top:12px"><input id="agents-pw" type="password" autocomplete="current-password" placeholder="Password">
-            <button class="btn primary" id="agents-unlock">${icon('check')}Use real agents</button></div>`}
+            <div class="field" style="margin-top:12px"><label for="agents-pw">Password</label>
+              <div class="row"><input id="agents-pw" type="password" autocomplete="current-password" placeholder="Enter the password">
+              <button class="btn primary" id="agents-unlock">${icon('check')}Use real agents</button></div></div>`}
         <div class="hint" style="margin-top:10px">Model: ${esc(settings.model)} · Sandbox: ${esc(settings.sandbox)}</div>
       </div>
       ${install.can() ? `<div class="card"><h4>Install the app</h4><p>Put Mesora Blocks on your home screen or desktop. It opens in its own window, like any other app.</p>
@@ -1151,6 +1153,9 @@ $('#composer').addEventListener('submit', e => {
   if (pending.some(p => p.uploading)) return toast('Still uploading, one moment...');
   const refs = takeAttachments();
   send([$('#input').value.trim(), refs].filter(Boolean).join('\n\n'));
+});
+document.addEventListener('keydown', e => {   // Enter in the password box unlocks
+  if (e.target.id === 'agents-pw' && e.key === 'Enter') { e.preventDefault(); agentsGate(true); }
 });
 $('#input').addEventListener('keydown', e => {
   if (mention.key_(e)) return;
