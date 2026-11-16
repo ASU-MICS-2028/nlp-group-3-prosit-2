@@ -1,0 +1,54 @@
+{
+  "project_name": "Warehouse Stock",
+  "description": "A distributor tracks how much of each item is in each of its warehouses.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Warehouse",
+      "description": "A place where goods are kept.",
+      "fields": [
+        {"name": "name", "type": "str", "unique": true}
+      ]
+    },
+    {
+      "name": "Item",
+      "description": "A kind of goods.",
+      "fields": [
+        {"name": "sku", "type": "str", "unique": true, "description": "stock code"},
+        {"name": "name", "type": "str"}
+      ]
+    },
+    {
+      "name": "Movement",
+      "description": "Goods coming in, going out or moving between warehouses.",
+      "belongs_to": ["Item", "Warehouse"],
+      "fields": [
+        {"name": "item_id", "type": "int"},
+        {"name": "warehouse_id", "type": "int", "description": "where the goods arrive (receive) or leave from (ship, transfer)"},
+        {"name": "kind", "type": "str", "description": "receive, ship or transfer"},
+        {"name": "quantity", "type": "int"},
+        {"name": "to_warehouse_id", "type": "int", "required": false, "description": "the destination warehouse; only for a transfer"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/warehouses", "summary": "Add a warehouse", "entity": "Warehouse", "access": "admin", "request_fields": ["name"], "status_code": 201},
+    {"method": "GET", "path": "/warehouses", "summary": "List warehouses", "entity": "Warehouse", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/items", "summary": "Add an item", "entity": "Item", "access": "admin", "request_fields": ["sku", "name"], "status_code": 201},
+    {"method": "GET", "path": "/items", "summary": "List items", "entity": "Item", "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/items/{id}", "summary": "Get an item", "entity": "Item", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/movements", "summary": "Record goods received, shipped or transferred", "entity": "Movement", "access": "user", "request_fields": ["item_id", "warehouse_id", "kind", "quantity", "to_warehouse_id"], "status_code": 201},
+    {"method": "GET", "path": "/movements", "summary": "List all movements", "entity": "Movement", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/warehouses/{id}/stock", "summary": "What a warehouse holds: [{\"item_id\": int, \"sku\": str, \"quantity\": int}]", "entity": null, "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/items/{id}/stock", "summary": "How much of an item there is: {\"item_id\": int, \"total\": int, \"by_warehouse\": [{\"warehouse_id\": int, \"quantity\": int}]}", "entity": null, "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "kind must be receive, ship or transfer; anything else is rejected with 422.",
+    "quantity must be at least 1; reject with 422.",
+    "receive adds the quantity of the item to warehouse_id. ship removes it from warehouse_id; shipping more than that warehouse holds of the item returns 409 and changes nothing.",
+    "transfer moves the quantity from warehouse_id to to_warehouse_id. For a transfer, to_warehouse_id is required and must be different from warehouse_id (otherwise 422) and must refer to an existing warehouse (otherwise 404). Transferring more than warehouse_id holds of the item returns 409 and changes nothing.",
+    "GET /warehouses/{id}/stock returns a JSON list with one object (item_id, sku, quantity) for each item the warehouse holds more than 0 of. An unknown warehouse returns 404.",
+    "GET /items/{id}/stock returns a JSON object with item_id, total (the quantity over all warehouses) and by_warehouse, a list with one object (warehouse_id, quantity) for each warehouse that holds more than 0 of the item. An unknown item returns 404.",
+    "item_id and warehouse_id must refer to existing records; otherwise 404."
+  ]
+}

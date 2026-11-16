@@ -1,0 +1,27 @@
+{
+  "project_name": "Notes",
+  "description": "A simple notebook where signed-in people keep short notes.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Note",
+      "description": "A short note.",
+      "fields": [
+        {"name": "title", "type": "str"},
+        {"name": "body", "type": "str", "required": false},
+        {"name": "pinned", "type": "bool", "required": false, "description": "false unless sent as true"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/notes", "summary": "Add a note", "entity": "Note", "access": "user", "request_fields": ["title", "body", "pinned"], "status_code": 201},
+    {"method": "GET", "path": "/notes", "summary": "List notes", "entity": "Note", "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/notes/{id}", "summary": "Get a note", "entity": "Note", "access": "user", "status_code": 200},
+    {"method": "PUT", "path": "/notes/{id}", "summary": "Replace a note", "entity": "Note", "access": "user", "request_fields": ["title", "body", "pinned"], "status_code": 200},
+    {"method": "DELETE", "path": "/notes/{id}", "summary": "Delete a note", "entity": "Note", "access": "user", "status_code": 204}
+  ],
+  "rules": [
+    "title cannot be empty; reject with 422.",
+    "pinned is false when it is not sent."
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "project_name": "Community Library",
+  "description": "A small library that lends books to its members.",
+  "users": [
+    "members",
+    "librarians"
+  ],
+  "data": [
+    "books with title, author, ISBN (unique) and whether the book is available",
+    "members with full name and email (unique)",
+    "loans of a book to a member with a due date and whether it has been returned"
+  ],
+  "actions": [
+    "librarians add and remove books",
+    "anyone can browse the books",
+    "people join as members",
+    "members borrow a book",
+    "members return a book",
+    "librarians see all members and all loans"
+  ],
+  "rules": [
+    "a book can only be lent to one member at a time",
+    "a member can have at most 3 books at a time",
+    "the due date cannot be in the past",
+    "a book that is on loan cannot be removed"
+  ]
+}

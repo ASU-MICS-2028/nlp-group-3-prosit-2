@@ -1,0 +1,29 @@
+{
+  "project_name": "Staff Leave",
+  "description": "Employees ask for days off and managers approve or reject the requests.",
+  "users": [
+    "employees",
+    "managers"
+  ],
+  "data": [
+    "employees with full name, email (unique) and the number of leave days they get each year",
+    "leave requests of an employee with a start date, an end date, the number of days and a status (pending, approved, rejected or cancelled)"
+  ],
+  "actions": [
+    "managers add employees",
+    "employees view an employee record",
+    "employees ask for leave",
+    "employees view a leave request",
+    "employees cancel a leave request",
+    "managers approve or reject a request",
+    "employees see how many days an employee has used and has left",
+    "managers see all employees and all requests"
+  ],
+  "rules": [
+    "nobody can take more days than they have left",
+    "an employee's leave requests cannot overlap",
+    "leave cannot start in the past and cannot end before it starts",
+    "a request is decided once; approved or pending leave can still be cancelled",
+    "cancelled leave gives the days back"
+  ]
+}

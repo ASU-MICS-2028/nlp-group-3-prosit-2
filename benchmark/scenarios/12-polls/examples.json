@@ -1,0 +1,5 @@
+{
+  "Poll": {"create": {"question": "Where do we hold the retreat?"}},
+  "Option": {"create": {"label": "Ada"}},
+  "Vote": {"create": {}}
+}

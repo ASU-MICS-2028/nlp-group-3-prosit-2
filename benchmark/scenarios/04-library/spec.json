@@ -1,0 +1,58 @@
+{
+  "project_name": "Community Library",
+  "description": "A small library that lends books to its members.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Book",
+      "description": "A book the library owns.",
+      "fields": [
+        {"name": "title", "type": "str"},
+        {"name": "author", "type": "str"},
+        {"name": "isbn", "type": "str", "unique": true},
+        {"name": "available", "type": "bool", "read_only": true, "description": "true unless the book is on loan"}
+      ]
+    },
+    {
+      "name": "Member",
+      "description": "A person who can borrow books.",
+      "fields": [
+        {"name": "full_name", "type": "str"},
+        {"name": "email", "type": "email", "unique": true}
+      ]
+    },
+    {
+      "name": "Loan",
+      "description": "A book lent to a member.",
+      "belongs_to": ["Book", "Member"],
+      "fields": [
+        {"name": "book_id", "type": "int"},
+        {"name": "member_id", "type": "int"},
+        {"name": "due_date", "type": "date"},
+        {"name": "returned", "type": "bool", "read_only": true, "description": "false until the book is returned"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/books", "summary": "Add a book", "entity": "Book", "access": "admin", "request_fields": ["title", "author", "isbn"], "status_code": 201},
+    {"method": "GET", "path": "/books", "summary": "List books", "entity": "Book", "access": "public", "status_code": 200},
+    {"method": "GET", "path": "/books/{id}", "summary": "Get a book", "entity": "Book", "access": "public", "status_code": 200},
+    {"method": "DELETE", "path": "/books/{id}", "summary": "Remove a book", "entity": "Book", "access": "admin", "status_code": 204},
+    {"method": "POST", "path": "/members", "summary": "Join as a member", "entity": "Member", "access": "public", "request_fields": ["full_name", "email"], "status_code": 201},
+    {"method": "GET", "path": "/members", "summary": "List members", "entity": "Member", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/members/{id}", "summary": "Get a member", "entity": "Member", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/loans", "summary": "Borrow a book", "entity": "Loan", "access": "user", "request_fields": ["book_id", "member_id", "due_date"], "status_code": 201},
+    {"method": "GET", "path": "/loans", "summary": "List all loans", "entity": "Loan", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/loans/{id}", "summary": "Get a loan", "entity": "Loan", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/loans/{id}/return", "summary": "Return a book", "entity": "Loan", "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "A new book has available true.",
+    "Borrowing a book that is not available returns 409. Borrowing sets the book's available to false.",
+    "A member can have at most 3 loans that are not returned; a 4th returns 409.",
+    "Returning sets returned to true and the book's available to true. Returning a loan that is already returned returns 409.",
+    "due_date cannot be in the past; reject with 422.",
+    "A book that is on loan cannot be deleted; reject with 409.",
+    "book_id and member_id must refer to existing records; otherwise 404."
+  ]
+}

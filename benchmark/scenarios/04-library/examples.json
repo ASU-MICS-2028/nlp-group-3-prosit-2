@@ -1,0 +1,5 @@
+{
+  "Book": {"create": {"title": "Things Fall Apart", "author": "Chinua Achebe", "isbn": "9780385474542"}},
+  "Member": {"create": {"full_name": "Efua Asante", "email": "efua@example.com"}},
+  "Loan": {"create": {"due_date": "2031-04-01"}}
+}

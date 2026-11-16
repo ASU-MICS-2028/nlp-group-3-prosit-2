@@ -1,0 +1,223 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <title>Mesora Blocks architecture</title>
+  <desc>A person describes an API in the UI. The gateway passes messages to the orchestrator, plain Python that enforces the rules. It runs four agents on the Claude Agent SDK: Requirements, Architect, then (after the person approves the spec) Coder and Tester, with a failure-report loop between them. The gateway starts the generated API.</desc>
+  <defs>
+    <marker id="a-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#475569"/></marker>
+    <marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#0F172A"/></marker>
+    <marker id="a-pink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#DB2777"/></marker>
+    <marker id="a-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#D97706"/></marker>
+    <marker id="a-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#059669"/></marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+
+  <!-- title -->
+  <text x="40" y="52" font-size="30" font-weight="700" fill="#0F172A">How Mesora Blocks turns a description into a running API</text>
+  <text x="40" y="80" font-size="16" fill="#64748B">Four agents on the Claude Agent SDK. The orchestrator holds the rules; the agents do the work; a person approves the design.</text>
+
+  <!-- legend -->
+  <g font-size="13" fill="#475569">
+    <line x1="1268" y1="44" x2="1308" y2="44" stroke="#475569" stroke-width="2" marker-end="url(#a-slate)"/>
+    <text x="1316" y="48">flow</text>
+    <line x1="1368" y1="44" x2="1408" y2="44" stroke="#475569" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#a-slate)"/>
+    <text x="1416" y="48">goes back</text>
+    <rect x="1268" y="62" width="40" height="18" rx="4" fill="#FEF3C7" stroke="#D97706"/>
+    <text x="1316" y="76">a person decides</text>
+  </g>
+
+  <!-- row A: person, UI, gateway, generated API -->
+  <g>
+    <rect x="40" y="110" width="220" height="80" rx="12" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <text x="150" y="144" text-anchor="middle" font-size="18" font-weight="700" fill="#0F172A">Person</text>
+    <text x="150" y="167" text-anchor="middle" font-size="13" fill="#475569">describes it in plain words</text>
+
+    <rect x="300" y="110" width="260" height="80" rx="12" fill="#EEF2FF" stroke="#6366F1" stroke-width="2"/>
+    <text x="430" y="144" text-anchor="middle" font-size="18" font-weight="700" fill="#0F172A">Mesora Blocks UI</text>
+    <text x="430" y="167" text-anchor="middle" font-size="13" fill="#475569">chat · approve the spec · try it</text>
+
+    <rect x="600" y="110" width="380" height="80" rx="12" fill="#F1F5F9" stroke="#475569" stroke-width="2"/>
+    <text x="790" y="144" text-anchor="middle" font-size="18" font-weight="700" fill="#0F172A">Gateway (FastAPI)</text>
+    <text x="790" y="167" text-anchor="middle" font-size="13" fill="#475569">sessions · live events (SSE) · queued messages · @mentions</text>
+
+    <rect x="1240" y="110" width="320" height="80" rx="12" fill="#ECFDF5" stroke="#059669" stroke-width="2"/>
+    <text x="1400" y="144" text-anchor="middle" font-size="18" font-weight="700" fill="#0F172A">Generated API</text>
+    <text x="1400" y="167" text-anchor="middle" font-size="13" fill="#475569">FastAPI + SQLite · Swagger /docs · GET /health</text>
+
+    <line x1="262" y1="150" x2="298" y2="150" stroke="#475569" stroke-width="2" marker-start="url(#a-slate)" marker-end="url(#a-slate)"/>
+    <line x1="562" y1="150" x2="598" y2="150" stroke="#475569" stroke-width="2" marker-start="url(#a-slate)" marker-end="url(#a-slate)"/>
+    <line x1="982" y1="150" x2="1236" y2="150" stroke="#059669" stroke-width="2" marker-end="url(#a-green)"/>
+    <text x="1109" y="140" text-anchor="middle" font-size="13" fill="#047857">starts it, waits for /health,</text>
+    <text x="1109" y="172" text-anchor="middle" font-size="13" fill="#047857">publishes it on a subdomain</text>
+    <line x1="790" y1="192" x2="790" y2="226" stroke="#0F172A" stroke-width="2" marker-end="url(#a-ink)"/>
+  </g>
+
+  <!-- left column: shared contract -->
+  <g>
+    <rect x="40" y="230" width="220" height="540" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="58" y="262" font-size="17" font-weight="700" fill="#0F172A">ProjectState</text>
+    <text x="58" y="284" font-size="12.5" fill="#64748B">the shared contract: every</text>
+    <text x="58" y="301" font-size="12.5" fill="#64748B">agent reads and writes it</text>
+    <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#334155">
+      <text x="58" y="334">chat</text>
+      <text x="58" y="356">requirements</text>
+      <text x="58" y="378">spec</text>
+      <text x="58" y="400">spec_approved</text>
+      <text x="58" y="422">change_request</text>
+      <text x="58" y="444">change_files</text>
+      <text x="58" y="466">tasks</text>
+      <text x="58" y="488">workspace</text>
+      <text x="58" y="510">build_ok</text>
+      <text x="58" y="532">tests_ok</text>
+      <text x="58" y="554">failures</text>
+      <text x="58" y="576">result</text>
+      <text x="58" y="598">logs</text>
+    </g>
+    <line x1="58" y1="628" x2="242" y2="628" stroke="#CBD5E1"/>
+    <text x="58" y="656" font-size="12.5" fill="#64748B">Every agent has one shape:</text>
+    <text x="58" y="680" font-family="Menlo, Consolas, monospace" font-size="12" fill="#334155">async def run(</text>
+    <text x="80" y="698" font-family="Menlo, Consolas, monospace" font-size="12" fill="#334155">state, emit)</text>
+    <text x="80" y="716" font-family="Menlo, Consolas, monospace" font-size="12" fill="#334155">-&gt; state</text>
+  </g>
+
+  <!-- row B: orchestrator -->
+  <g>
+    <rect x="300" y="230" width="1260" height="134" rx="12" fill="#0F172A"/>
+    <text x="322" y="262" font-size="19" font-weight="700" fill="#FFFFFF">Orchestrator: plain Python, not AI</text>
+    <text x="640" y="262" font-size="14" fill="#94A3B8">These rules must hold every time, so no model gets to decide them.</text>
+    <g font-size="13.5" fill="#E2E8F0">
+      <rect x="322" y="282" width="356" height="28" rx="14" fill="#1E293B" stroke="#334155"/>
+      <text x="500" y="301" text-anchor="middle">Design only after the requirements are confirmed</text>
+      <rect x="690" y="282" width="270" height="28" rx="14" fill="#1E293B" stroke="#D97706"/>
+      <text x="825" y="301" text-anchor="middle">Code only after the spec is approved</text>
+      <rect x="972" y="282" width="250" height="28" rx="14" fill="#1E293B" stroke="#334155"/>
+      <text x="1097" y="301" text-anchor="middle">Spec split into build tasks</text>
+      <rect x="1234" y="282" width="306" height="28" rx="14" fill="#1E293B" stroke="#334155"/>
+      <text x="1387" y="301" text-anchor="middle">Every step logged (steps.jsonl)</text>
+
+      <rect x="322" y="320" width="300" height="28" rx="14" fill="#1E293B" stroke="#334155"/>
+      <text x="472" y="339" text-anchor="middle">At most MAX_FIX_ROUNDS fix rounds</text>
+      <rect x="634" y="320" width="356" height="28" rx="14" fill="#1E293B" stroke="#334155"/>
+      <text x="812" y="339" text-anchor="middle">Fix breaks the build → last working code back</text>
+      <rect x="1002" y="320" width="370" height="28" rx="14" fill="#1E293B" stroke="#334155"/>
+      <text x="1187" y="339" text-anchor="middle">Message during a build → stop and redesign</text>
+    </g>
+  </g>
+
+  <!-- orchestrator runs each agent -->
+  <g stroke="#0F172A" stroke-width="2">
+    <line x1="425" y1="366" x2="425" y2="416" marker-end="url(#a-ink)"/>
+    <line x1="725" y1="366" x2="725" y2="416" marker-end="url(#a-ink)"/>
+    <line x1="1175" y1="366" x2="1175" y2="416" marker-end="url(#a-ink)"/>
+    <line x1="1445" y1="366" x2="1445" y2="416" marker-end="url(#a-ink)"/>
+  </g>
+  <text x="435" y="398" font-size="12.5" fill="#64748B">runs each agent in turn</text>
+
+  <!-- row C: agents -->
+  <!-- Requirements -->
+  <g>
+    <rect x="300" y="420" width="250" height="180" rx="12" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2"/>
+    <path d="M300 432a12 12 0 0 1 12-12h226a12 12 0 0 1 12 12v26H300z" fill="#7C3AED"/>
+    <text x="318" y="446" font-size="17" font-weight="700" fill="#FFFFFF">Requirements</text>
+    <text x="318" y="482" font-size="14" fill="#334155">Asks one question at a time</text>
+    <g font-family="Menlo, Consolas, monospace" font-size="12.5" fill="#5B21B6">
+      <text x="318" y="508">ask_user</text>
+      <text x="318" y="527">propose_summary</text>
+      <text x="318" y="546">confirm_summary · decline</text>
+    </g>
+    <text x="318" y="582" font-size="13" font-weight="700" fill="#7C3AED">out: Requirements</text>
+  </g>
+  <!-- Architect -->
+  <g>
+    <rect x="600" y="420" width="250" height="180" rx="12" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+    <path d="M600 432a12 12 0 0 1 12-12h226a12 12 0 0 1 12 12v26H600z" fill="#2563EB"/>
+    <text x="618" y="446" font-size="17" font-weight="700" fill="#FFFFFF">Architect</text>
+    <text x="618" y="482" font-size="14" fill="#334155">Designs the API spec</text>
+    <g font-family="Menlo, Consolas, monospace" font-size="12.5" fill="#1E40AF">
+      <text x="618" y="508">submit_spec</text>
+      <text x="632" y="527">↳ schema + sense checks</text>
+      <text x="618" y="546">no file access</text>
+    </g>
+    <text x="618" y="582" font-size="13" font-weight="700" fill="#2563EB">out: Spec</text>
+  </g>
+  <!-- approval gate -->
+  <g>
+    <rect x="888" y="452" width="134" height="116" rx="12" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <text x="955" y="490" text-anchor="middle" font-size="16" font-weight="700" fill="#92400E">Person</text>
+    <text x="955" y="510" text-anchor="middle" font-size="16" font-weight="700" fill="#92400E">approves</text>
+    <text x="955" y="532" text-anchor="middle" font-size="12.5" fill="#92400E">no code before</text>
+    <text x="955" y="549" text-anchor="middle" font-size="12.5" fill="#92400E">this point</text>
+  </g>
+  <!-- Coder -->
+  <g>
+    <rect x="1060" y="420" width="230" height="180" rx="12" fill="#FFFFFF" stroke="#0D9488" stroke-width="2"/>
+    <path d="M1060 432a12 12 0 0 1 12-12h206a12 12 0 0 1 12 12v26H1060z" fill="#0D9488"/>
+    <text x="1078" y="446" font-size="17" font-weight="700" fill="#FFFFFF">Coder</text>
+    <text x="1078" y="482" font-size="14" fill="#334155">Writes the code in app/</text>
+    <g font-family="Menlo, Consolas, monospace" font-size="12.5" fill="#115E59">
+      <text x="1078" y="508">Read/Write/Edit: app/</text>
+      <text x="1078" y="527">run_checks</text>
+      <text x="1078" y="546">finish_build (gate)</text>
+    </g>
+    <text x="1078" y="582" font-size="13" font-weight="700" fill="#0D9488">out: app/ that starts</text>
+  </g>
+  <!-- Tester -->
+  <g>
+    <rect x="1330" y="420" width="230" height="180" rx="12" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <path d="M1330 432a12 12 0 0 1 12-12h206a12 12 0 0 1 12 12v26H1330z" fill="#DB2777"/>
+    <text x="1348" y="446" font-size="17" font-weight="700" fill="#FFFFFF">Tester</text>
+    <text x="1348" y="482" font-size="14" fill="#334155">Tests against the spec</text>
+    <g font-family="Menlo, Consolas, monospace" font-size="12.5" fill="#9D174D">
+      <text x="1348" y="508">Write: tests/ only</text>
+      <text x="1348" y="527">run_tests</text>
+      <text x="1348" y="546">submit_report</text>
+    </g>
+    <text x="1348" y="582" font-size="13" font-weight="700" fill="#DB2777">out: test results</text>
+  </g>
+
+  <!-- agent flow -->
+  <g stroke="#475569" stroke-width="2">
+    <line x1="552" y1="510" x2="596" y2="510" marker-end="url(#a-slate)"/>
+    <line x1="852" y1="510" x2="884" y2="510" marker-end="url(#a-slate)"/>
+    <line x1="1024" y1="510" x2="1056" y2="510" marker-end="url(#a-slate)"/>
+    <line x1="1292" y1="510" x2="1326" y2="510" marker-end="url(#a-slate)"/>
+  </g>
+
+  <!-- feedback loops -->
+  <path d="M1445 602 C1445 652, 1175 652, 1175 606" fill="none" stroke="#DB2777" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#a-pink)"/>
+  <text x="1310" y="666" text-anchor="middle" font-size="13.5" fill="#BE185D">failure report → fix round</text>
+  <path d="M955 570 C955 652, 725 652, 725 606" fill="none" stroke="#D97706" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#a-amber)"/>
+  <text x="840" y="666" text-anchor="middle" font-size="13.5" fill="#B45309">change request (also typed mid-build)</text>
+
+  <!-- row D: SDK foundation -->
+  <g>
+    <rect x="300" y="690" width="1260" height="80" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+    <text x="322" y="717" font-size="15.5" font-weight="700" fill="#0F172A">core/sdk.run_agent:</text>
+    <text x="474" y="717" font-size="15.5" fill="#0F172A">each agent is its own Claude Agent SDK session (Thought → Action → Observation)</text>
+    <g font-size="13" fill="#334155">
+      <rect x="322" y="731" width="236" height="26" rx="13" fill="#FFFFFF" stroke="#CBD5E1"/>
+      <text x="440" y="749" text-anchor="middle">Only our tools (in-process MCP)</text>
+      <rect x="568" y="731" width="130" height="26" rx="13" fill="#FFFFFF" stroke="#CBD5E1"/>
+      <text x="633" y="749" text-anchor="middle">No Bash, no web</text>
+      <rect x="708" y="731" width="350" height="26" rx="13" fill="#FFFFFF" stroke="#CBD5E1"/>
+      <text x="883" y="749" text-anchor="middle">File tools locked to the project (PreToolUse hook)</text>
+      <rect x="1068" y="731" width="190" height="26" rx="13" fill="#FFFFFF" stroke="#CBD5E1"/>
+      <text x="1163" y="749" text-anchor="middle">Turn and budget limits</text>
+      <rect x="1268" y="731" width="272" height="26" rx="13" fill="#FFFFFF" stroke="#CBD5E1"/>
+      <text x="1404" y="749" text-anchor="middle">Tokens, cost and time logged per step</text>
+    </g>
+  </g>
+
+  <!-- row E: evaluation and golden example -->
+  <g>
+    <rect x="40" y="800" width="220" height="70" rx="12" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5"/>
+    <text x="58" y="828" font-size="15.5" font-weight="700" fill="#0F172A">Golden clinic</text>
+    <text x="58" y="850" font-size="12.5" fill="#64748B">known-good reference for all</text>
+
+    <rect x="300" y="800" width="1260" height="70" rx="12" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5"/>
+    <text x="322" y="828" font-size="15.5" font-weight="700" fill="#0F172A">Evaluation</text>
+    <g font-size="13.5" fill="#334155">
+      <text x="322" y="852"><tspan font-family="Menlo, Consolas, monospace" font-size="12.5">run.py --golden clinic</tspan> full run   ·   <tspan font-family="Menlo, Consolas, monospace" font-size="12.5">eval/export_logs</tspan> steps.jsonl → runs.csv, steps.csv   ·   <tspan font-family="Menlo, Consolas, monospace" font-size="12.5">eval/spec_compare</tspan> generated spec vs reference</text>
+    </g>
+    <line x1="262" y1="835" x2="296" y2="835" stroke="#475569" stroke-width="2" marker-end="url(#a-slate)"/>
+  </g>
+</svg>

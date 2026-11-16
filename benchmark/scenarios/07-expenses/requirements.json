@@ -1,0 +1,23 @@
+{
+  "project_name": "Household Expenses",
+  "description": "A tracker where a household records what it spends, by category.",
+  "users": [
+    "household members",
+    "the household administrator"
+  ],
+  "data": [
+    "categories with a name (unique)",
+    "expenses with a category, an amount, the date it was spent and an optional note"
+  ],
+  "actions": [
+    "members add categories",
+    "members record, edit and delete expenses",
+    "members see all expenses",
+    "members see the total spent and how many expenses there are",
+    "the administrator deletes a category"
+  ],
+  "rules": [
+    "an amount must be more than zero",
+    "a category that has expenses cannot be deleted"
+  ]
+}

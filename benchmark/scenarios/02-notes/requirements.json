@@ -1,0 +1,20 @@
+{
+  "project_name": "Notes",
+  "description": "A simple notebook where signed-in people keep short notes.",
+  "users": [
+    "people who keep notes"
+  ],
+  "data": [
+    "notes with a title, optional text and whether the note is pinned"
+  ],
+  "actions": [
+    "people add a note",
+    "people see all notes and a single note",
+    "people edit a note",
+    "people delete a note"
+  ],
+  "rules": [
+    "a note must have a title",
+    "a note is not pinned unless the person pins it"
+  ]
+}

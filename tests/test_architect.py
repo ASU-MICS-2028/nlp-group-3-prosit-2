@@ -81,7 +81,8 @@ def test_change_request_shows_the_old_spec_and_the_change():
     prompt = replies[-1]
     assert "<spec>" in prompt and "Add a notes field to Patient" in prompt
     assert "app/main.py" in prompt and "app/schemas/patient.py" in prompt
-    assert st.change_request is None and st.logs[-1].action == "change"
+    assert st.logs[-1].action == "change"
+    assert st.change_request == "Add a notes field to Patient"   # kept for the Coder
 
 
 def test_checks_reject_explicit_id_field():
