@@ -1,0 +1,32 @@
+{
+  "project_name": "IT Helpdesk",
+  "description": "Staff report IT problems and the support team works through them.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Issue",
+      "description": "An IT problem.",
+      "fields": [
+        {"name": "title", "type": "str"},
+        {"name": "description", "type": "str"},
+        {"name": "priority", "type": "str", "description": "low, medium or high"},
+        {"name": "status", "type": "str", "read_only": true, "description": "open, in_progress or resolved"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/issues", "summary": "Report an issue", "entity": "Issue", "access": "user", "request_fields": ["title", "description", "priority"], "status_code": 201},
+    {"method": "GET", "path": "/issues", "summary": "List issues", "entity": "Issue", "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/issues/{id}", "summary": "Get an issue", "entity": "Issue", "access": "user", "status_code": 200},
+    {"method": "PATCH", "path": "/issues/{id}", "summary": "Edit an issue", "entity": "Issue", "access": "user", "request_fields": ["title", "description", "priority"], "status_code": 200},
+    {"method": "POST", "path": "/issues/{id}/start", "summary": "Start work on an issue", "entity": "Issue", "access": "admin", "status_code": 200},
+    {"method": "POST", "path": "/issues/{id}/resolve", "summary": "Resolve an issue", "entity": "Issue", "access": "admin", "status_code": 200},
+    {"method": "POST", "path": "/issues/{id}/reopen", "summary": "Reopen a resolved issue", "entity": "Issue", "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "priority must be low, medium or high; anything else is rejected with 422.",
+    "A new issue has status open.",
+    "start moves an issue from open to in_progress; resolve moves it from in_progress to resolved; reopen moves it from resolved to open.",
+    "Any other status change returns 409 (for example resolving an open issue, or starting one that is in_progress)."
+  ]
+}

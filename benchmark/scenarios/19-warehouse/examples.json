@@ -1,0 +1,5 @@
+{
+  "Warehouse": {"create": {"name": "Tema"}},
+  "Item": {"create": {"sku": "CEM-50", "name": "Cement 50kg"}},
+  "Movement": {"create": {"kind": "receive", "quantity": 5}}
+}

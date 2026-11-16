@@ -1,0 +1,42 @@
+{
+  "project_name": "Restaurant Reservations",
+  "description": "A restaurant takes table reservations from its guests.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Table",
+      "description": "A table in the restaurant.",
+      "fields": [
+        {"name": "label", "type": "str", "unique": true},
+        {"name": "seats", "type": "int"}
+      ]
+    },
+    {
+      "name": "Reservation",
+      "description": "A 2-hour reservation of a table.",
+      "belongs_to": ["Table"],
+      "fields": [
+        {"name": "table_id", "type": "int"},
+        {"name": "guest_name", "type": "str"},
+        {"name": "party_size", "type": "int"},
+        {"name": "starts_at", "type": "datetime"},
+        {"name": "status", "type": "str", "read_only": true, "description": "booked or cancelled"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/tables", "summary": "Add a table", "entity": "Table", "access": "admin", "request_fields": ["label", "seats"], "status_code": 201},
+    {"method": "GET", "path": "/tables", "summary": "List tables", "entity": "Table", "access": "public", "status_code": 200},
+    {"method": "POST", "path": "/reservations", "summary": "Reserve a table", "entity": "Reservation", "access": "user", "request_fields": ["table_id", "guest_name", "party_size", "starts_at"], "status_code": 201},
+    {"method": "GET", "path": "/reservations", "summary": "List all reservations", "entity": "Reservation", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/reservations/{id}", "summary": "Get a reservation", "entity": "Reservation", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/reservations/{id}/cancel", "summary": "Cancel a reservation (kept with status cancelled)", "entity": "Reservation", "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "party_size must be at least 1 and at most the table's seats; otherwise reject with 422.",
+    "starts_at cannot be in the past; reject with 422.",
+    "Each reservation lasts 2 hours. A table cannot have two booked reservations that overlap; reject with 409.",
+    "A new reservation has status booked. Cancelling sets status to cancelled; reservations are never deleted, and a cancelled one no longer blocks the table.",
+    "table_id must refer to an existing table; otherwise 404."
+  ]
+}

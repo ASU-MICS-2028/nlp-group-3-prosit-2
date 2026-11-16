@@ -1,0 +1,4 @@
+{
+  "Vehicle": {"create": {"plate": "GR-1234-24", "model": "Toyota Corolla", "daily_rate": 300.0}},
+  "Rental": {"create": {"customer_name": "Nana Agyeman", "start_date": "2031-07-01", "end_date": "2031-07-04"}}
+}

@@ -7,6 +7,9 @@ COPY . .
 RUN useradd --create-home --uid 1000 mesora && mkdir -p /data/workspace && chown -R mesora /data /app
 USER mesora
 ENV HOST=0.0.0.0 PORT=8000 WORKSPACE_DIR=/data/workspace PYTHONUNBUFFERED=1
+# The gateway container has no Docker daemon, so generated APIs run as plain processes here (NOT isolated).
+# Switch to SANDBOX=docker once the host's Docker is reachable from this container.
+ENV SANDBOX=local
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 CMD ["python", "-m", "server"]

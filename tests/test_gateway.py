@@ -134,7 +134,7 @@ def test_published_api_survives_restart(client):
 
 def test_api_without_health_check_is_refused(tmp_path):
     import asyncio
-    from server.stubs import serve
+    from core.sandbox import serve
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("")
     (tmp_path / "app" / "main.py").write_text("from fastapi import FastAPI\napp = FastAPI()\n")
@@ -209,3 +209,30 @@ def test_mentioned_files_reach_the_change_request(client):
     s = wait_idle(client)
     assert s["state"]["change_files"] == ["app/main.py"]   # only real files, once each
     assert "add reviews" in s["revisions"][-1]
+
+
+def test_mid_build_message_routes_to_architect(client, monkeypatch):
+    from agents import orchestrator
+    import server.app as gw
+
+    async def coder_with_queued(state, emit):
+        # A message arrives in the queue while the coder is running (mid-build)
+        for s in gw.SESSIONS.values():
+            s.queued.append("Actually, add notes to Patient")
+        state.build_ok = True
+        return state
+
+    monkeypatch.setitem(orchestrator.AGENTS, "coder", coder_with_queued)
+
+    client.post("/api/chat", json={"text": "I run a clinic"})
+    wait_idle(client)
+    client.post("/api/chat", json={"text": "Patients and staff"})
+    wait_idle(client)
+
+    client.post("/api/spec/approve")
+    s = wait_idle(client)
+
+    assert s["phase"] == "review"
+    assert s["state"]["spec_approved"] is False
+    assert any("Actually, add notes to Patient" in r for r in s["revisions"])
+    assert s["queued"] == []

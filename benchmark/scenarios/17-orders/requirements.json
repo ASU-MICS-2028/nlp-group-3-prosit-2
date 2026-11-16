@@ -1,0 +1,32 @@
+{
+  "project_name": "Wholesale Orders",
+  "description": "Customers build an order from several products, then pay for it or cancel it.",
+  "users": [
+    "customers",
+    "the wholesaler"
+  ],
+  "data": [
+    "products with a name (unique), a price and the number in stock",
+    "orders with who placed them, a status (open, paid or cancelled) and the total price",
+    "order items: a product and a quantity in an order, with the price per unit"
+  ],
+  "actions": [
+    "the wholesaler adds products",
+    "anyone can see the products",
+    "customers start an order",
+    "customers add products to an order and remove them",
+    "customers see their orders and an order's items",
+    "customers pay for an order",
+    "customers cancel an order",
+    "the wholesaler sees all orders"
+  ],
+  "rules": [
+    "customers can only see and change their own orders",
+    "items can only be added or removed while the order is open",
+    "nobody can order more than is in stock, and items in an order are taken out of stock",
+    "a product appears in an order only once",
+    "the order total is always the sum of its items",
+    "an empty order cannot be paid",
+    "cancelling an order puts its items back in stock"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "project_name": "Restaurant Reservations",
+  "description": "A restaurant takes table reservations from its guests.",
+  "users": [
+    "guests",
+    "the restaurant manager"
+  ],
+  "data": [
+    "tables with a label (unique) and a number of seats",
+    "reservations of a table with the guest's name, the number of people, the start time and a status (booked or cancelled)"
+  ],
+  "actions": [
+    "the manager adds tables",
+    "anyone can see the tables",
+    "guests reserve a table",
+    "guests view a reservation",
+    "guests cancel a reservation",
+    "the manager sees all reservations"
+  ],
+  "rules": [
+    "a reservation lasts 2 hours",
+    "a table cannot be reserved twice for overlapping times",
+    "the group must fit at the table",
+    "reservations cannot be made in the past",
+    "cancelled reservations are kept"
+  ]
+}

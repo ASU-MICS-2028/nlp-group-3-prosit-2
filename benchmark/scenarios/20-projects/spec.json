@@ -1,0 +1,50 @@
+{
+  "project_name": "Project Tasks",
+  "description": "A team plans projects as tasks, where some tasks must wait for others.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Project",
+      "description": "A piece of work made of tasks.",
+      "fields": [
+        {"name": "name", "type": "str", "unique": true},
+        {"name": "archived", "type": "bool", "read_only": true, "description": "false until the project is archived"}
+      ]
+    },
+    {
+      "name": "Task",
+      "description": "One step of a project.",
+      "belongs_to": ["Project"],
+      "fields": [
+        {"name": "project_id", "type": "int"},
+        {"name": "title", "type": "str"},
+        {"name": "blocked_by_id", "type": "int", "required": false, "description": "the id of the task that must be done before this one can start"},
+        {"name": "status", "type": "str", "read_only": true, "description": "todo, doing or done"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/projects", "summary": "Create a project", "entity": "Project", "access": "user", "request_fields": ["name"], "status_code": 201},
+    {"method": "GET", "path": "/projects", "summary": "List projects", "entity": "Project", "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/projects/{id}", "summary": "Get a project", "entity": "Project", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/projects/{id}/archive", "summary": "Archive a finished project", "entity": "Project", "access": "admin", "status_code": 200},
+    {"method": "POST", "path": "/tasks", "summary": "Add a task to a project", "entity": "Task", "access": "user", "request_fields": ["project_id", "title", "blocked_by_id"], "status_code": 201},
+    {"method": "GET", "path": "/tasks", "summary": "List tasks", "entity": "Task", "access": "user", "status_code": 200},
+    {"method": "GET", "path": "/tasks/{id}", "summary": "Get a task", "entity": "Task", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/tasks/{id}/start", "summary": "Start a task", "entity": "Task", "access": "user", "status_code": 200},
+    {"method": "POST", "path": "/tasks/{id}/finish", "summary": "Finish a task", "entity": "Task", "access": "user", "status_code": 200},
+    {"method": "DELETE", "path": "/tasks/{id}", "summary": "Delete a task", "entity": "Task", "access": "user", "status_code": 204},
+    {"method": "GET", "path": "/projects/{id}/progress", "summary": "Progress: {\"project_id\": int, \"total\": int, \"done\": int, \"percent\": int}", "entity": null, "access": "user", "status_code": 200}
+  ],
+  "rules": [
+    "A new project has archived false. A new task has status todo.",
+    "A task cannot be added to an archived project; reject with 409.",
+    "blocked_by_id, when sent, must refer to an existing task (otherwise 404) that is in the same project (otherwise 422).",
+    "start moves a task from todo to doing; finish moves it from doing to done. Any other status change returns 409.",
+    "A task with a blocked_by_id cannot be started until that task has status done; starting it earlier returns 409.",
+    "A task that another task is blocked by cannot be deleted; reject with 409.",
+    "archive sets archived to true. A project can be archived only when it has at least one task and every task is done; otherwise 409. Archiving a project that is already archived returns 409.",
+    "GET /projects/{id}/progress returns a JSON object with project_id, total (number of tasks), done (number with status done) and percent (done x 100 / total rounded to the nearest whole number, 0 when there are no tasks). An unknown project returns 404.",
+    "project_id must refer to an existing project; otherwise 404."
+  ]
+}

@@ -1,23 +1,20 @@
-"""Placeholder agents and serve sandbox, so the UI and gateway work end to end (milestone M2).
+"""Placeholder agents, so the UI and gateway work end to end (milestone M2).
 
 They replay the golden clinic example: the requirements stub asks one question and then
 summarises, the architect returns the golden spec, and the build copies the golden code and
 runs its real tests. Each follows the agent format `async def run(state, emit) -> state`.
 
-agents/orchestrator.py picks which agent does each job (its AGENTS table). Swap in the real
-coder (Role 3) and tester (Role 4) there as they land, and the serve sandbox (Role 3) in server/app.py.
+agents/orchestrator.py picks which agent does each job (its AGENTS table). The real agents
+replace these unless REQUIREMENTS_AGENT=stub (or CODER_AGENT=stub, ...) is set.
 """
 import asyncio
 import json
 import os
 import re
 import shutil
-import socket
-import subprocess
 import sys
 from pathlib import Path
 
-import httpx
 
 from core.events import Emit, Event
 from core.spec import Requirements, Spec
@@ -49,7 +46,6 @@ async def requirements(state: ProjectState, emit: Emit) -> ProjectState:
 async def architect(state: ProjectState, emit: Emit) -> ProjectState:
     if state.change_request:
         await _step(state, emit, "architect", "change", f"Change noted (stub keeps the golden spec): {state.change_request}")
-        state.change_request = None
     state.spec = Spec.model_validate_json((GOLDEN / "spec.json").read_text())
     state.spec_approved = False
     await _step(state, emit, "architect", "spec", f"{len(state.spec.endpoints)} endpoints")
@@ -91,45 +87,3 @@ async def tester(state: ProjectState, emit: Emit) -> ProjectState:
     await _step(state, emit, "tester", "run_tests", state.test_summary)
     await emit(Event(type="test", agent="tester", detail=state.test_summary, data={"ok": state.tests_ok}))
     return state
-
-
-# ---------- serve sandbox stand-in (Role 3 replaces with core/sandbox) ----------
-# ponytail: plain local process, not isolated; fine for the trusted golden code only.
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-async def serve(workspace: str, root_path: str) -> tuple[subprocess.Popen, int]:
-    """Start the API on 127.0.0.1 and wait until GET /health answers 200. root_path is the gateway
-    prefix, so /docs finds its openapi.json. An API without a health check is refused."""
-    port = _free_port()
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port), "--root-path", root_path],
-        cwd=workspace, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    async with httpx.AsyncClient() as c:
-        for _ in range(50):
-            if proc.poll() is not None:
-                raise RuntimeError(f"API didn't start: {proc.stderr.read()[-500:]}")
-            try:
-                r = await c.get(f"http://127.0.0.1:{port}/health", timeout=1)
-            except httpx.HTTPError:
-                await asyncio.sleep(0.2)
-                continue
-            if r.status_code == 200:
-                return proc, port
-            proc.kill()
-            raise RuntimeError(f"The API's health check failed (GET /health returned {r.status_code}).")
-    proc.kill()
-    raise RuntimeError("API didn't start in time")
-
-
-def stop(handle: tuple[subprocess.Popen, int]) -> None:
-    proc, _ = handle
-    proc.terminate()
-    try:
-        proc.wait(5)
-    except subprocess.TimeoutExpired:
-        proc.kill()

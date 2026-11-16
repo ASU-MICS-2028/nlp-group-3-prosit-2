@@ -1,0 +1,52 @@
+{
+  "project_name": "Team Polls",
+  "description": "A team runs polls; each person votes once per poll and everyone can see the results.",
+  "roles": ["user", "admin"],
+  "entities": [
+    {
+      "name": "Poll",
+      "description": "A question people vote on.",
+      "fields": [
+        {"name": "question", "type": "str"},
+        {"name": "closed", "type": "bool", "read_only": true, "description": "false until the poll is closed"}
+      ]
+    },
+    {
+      "name": "Option",
+      "description": "One possible answer of a poll.",
+      "belongs_to": ["Poll"],
+      "fields": [
+        {"name": "poll_id", "type": "int"},
+        {"name": "label", "type": "str"}
+      ]
+    },
+    {
+      "name": "Vote",
+      "description": "One person's vote for an option.",
+      "belongs_to": ["Option"],
+      "fields": [
+        {"name": "option_id", "type": "int"},
+        {"name": "user_id", "type": "int", "read_only": true, "description": "the voter, from the X-User-Id header"}
+      ]
+    }
+  ],
+  "endpoints": [
+    {"method": "POST", "path": "/polls", "summary": "Create a poll", "entity": "Poll", "access": "admin", "request_fields": ["question"], "status_code": 201},
+    {"method": "GET", "path": "/polls", "summary": "List polls", "entity": "Poll", "access": "public", "status_code": 200},
+    {"method": "GET", "path": "/polls/{id}", "summary": "Get a poll", "entity": "Poll", "access": "public", "status_code": 200},
+    {"method": "POST", "path": "/polls/{id}/close", "summary": "Close a poll", "entity": "Poll", "access": "admin", "status_code": 200},
+    {"method": "POST", "path": "/options", "summary": "Add an option to a poll", "entity": "Option", "access": "admin", "request_fields": ["poll_id", "label"], "status_code": 201},
+    {"method": "GET", "path": "/options", "summary": "List options", "entity": "Option", "access": "public", "status_code": 200},
+    {"method": "POST", "path": "/votes", "summary": "Vote for an option", "entity": "Vote", "access": "user", "request_fields": ["option_id"], "status_code": 201},
+    {"method": "GET", "path": "/votes", "summary": "List all votes", "entity": "Vote", "access": "admin", "status_code": 200},
+    {"method": "GET", "path": "/polls/{id}/results", "summary": "Votes per option: [{\"option_id\": int, \"label\": str, \"votes\": int}]", "entity": null, "access": "public", "status_code": 200}
+  ],
+  "rules": [
+    "user_id is set from the X-User-Id header when the vote is created.",
+    "A user can vote only once in a poll: a second vote by the same user for any option of the same poll returns 409.",
+    "Voting for an option of a closed poll returns 409.",
+    "A new poll has closed false; closing sets closed to true.",
+    "GET /polls/{id}/results returns a JSON list with one object per option of that poll: option_id, label and votes (the number of votes, 0 when there are none). An unknown poll returns 404.",
+    "poll_id and option_id must refer to existing records; otherwise 404."
+  ]
+}

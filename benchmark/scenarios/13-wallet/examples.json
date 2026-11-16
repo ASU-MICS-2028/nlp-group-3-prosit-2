@@ -1,0 +1,4 @@
+{
+  "Account": {"create": {"owner_name": "Adwoa Boakye"}},
+  "Transaction": {"create": {"kind": "deposit", "amount": 50.0}}
+}

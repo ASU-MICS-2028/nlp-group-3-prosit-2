@@ -1,0 +1,4 @@
+{
+  "Event": {"create": {"name": "Highlife Night", "starts_at": "2031-06-20T19:00:00", "capacity": 100}, "update": {"name": "Highlife Night II", "capacity": 120}},
+  "Ticket": {"create": {"holder_name": "Abena Osei"}}
+}

@@ -1,0 +1,26 @@
+{
+  "project_name": "Car Rentals",
+  "description": "A small company rents out its vehicles by the day.",
+  "users": [
+    "customers",
+    "the rental manager"
+  ],
+  "data": [
+    "vehicles with a number plate (unique), a model and a daily rate",
+    "rentals of a vehicle with the customer's name, start date, end date, the total price and whether it has been returned"
+  ],
+  "actions": [
+    "the manager adds and removes vehicles",
+    "anyone can see the vehicles",
+    "customers rent a vehicle",
+    "customers view a rental",
+    "customers return a vehicle",
+    "the manager sees all rentals"
+  ],
+  "rules": [
+    "a vehicle cannot be rented twice for overlapping dates",
+    "the end date must be after the start date",
+    "a rental cannot start in the past",
+    "the total is the daily rate times the number of days"
+  ]
+}
