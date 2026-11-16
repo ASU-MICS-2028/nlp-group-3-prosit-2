@@ -5,6 +5,8 @@
     RAG=off python -m eval.run --label no-rag            # same team, search_patterns switched off
     LLM_MODEL=claude-sonnet-5-5 python -m eval.run --label sonnet
     python -m eval.run --label team --scenarios 05-shop 16-hotel --repeat 3
+    python -m eval.run --label single --system single    # one agent, same spec, same tools and budget
+    python -m eval.run --label team --fuzz               # also fuzz each build with Schemathesis (crashes)
     python -m eval.run --summary                         # print the table from the CSV, run nothing
 
 One row is written per build, as soon as it finishes, so a run that stops half-way loses nothing
@@ -17,6 +19,11 @@ What is measured, per build:
   tests_ok       the Tester's verdict on the final code (empty when there was no Tester)
   fix_rounds     how many times the Tester sent the Coder back
   tokens, cost_usd, seconds   what the build cost, summed over every agent step
+  hidden_contract / hidden_generic / hidden_rules   the score per kind of hidden test: the spec's
+                 contract (routes, auth), generic behaviour (CRUD, 404/409/422), business rules
+  false_ok       the system said its own tests pass (tests_ok) but the hidden tests found bugs:
+                 how far to trust the system's own "done"
+  searches       search_patterns calls (RAG use); crashes: endpoints Schemathesis crashed (--fuzz)
 
 Each build starts from the scenario's reference spec, already approved: this measures the Coder
 and Tester, not the Requirements agent or the Architect. THIS MAKES REAL MODEL CALLS.
@@ -38,8 +45,10 @@ ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "eval" / "results" / "results.csv"
 WORKSPACES = ROOT / "workspace" / "_eval"     # workspace/ is gitignored
 COLUMNS = ["label", "system", "model", "rag", "scenario", "run", "build_ok", "tests_ok", "tester_tests", "fix_rounds",
-           "hidden_passed", "hidden_total", "hidden_score", "all_passed", "tokens", "cost_usd", "seconds",
-           "coder_tokens", "tester_tokens", "failed", "error"]
+           "hidden_passed", "hidden_total", "hidden_score", "all_passed", "hidden_contract", "hidden_generic",
+           "hidden_rules", "false_ok", "searches", "crashes", "tokens", "cost_usd", "seconds",
+           "coder_tokens", "tester_tokens", "single_tokens", "failed", "error"]
+FUZZ = False   # --fuzz: also run Schemathesis on every build (no model calls, but slower)
 
 
 async def no_events(event) -> None:
@@ -61,10 +70,20 @@ async def coder_only(state: ProjectState) -> ProjectState:
     return state
 
 
-SYSTEMS = {"team": team, "coder": coder_only}
-# ponytail: the single-agent baseline (agents/single.py) is not here yet. It builds from the
-# requirements and chooses its own paths, so hidden tests written for the reference spec would
-# not fit it. Add it once it can be given the reference spec.
+async def single_agent(state: ProjectState) -> ProjectState:
+    """One agent, the same approved spec, the team's tools and total budget (agents/single.run_spec)."""
+    state = await orchestrator.AGENTS["single"](state, no_events)
+    orchestrator.write_log(state)
+    return state
+
+
+SYSTEMS = {"team": team, "coder": coder_only, "single": single_agent}
+
+
+def category_score(results: list[dict], file: str) -> str:
+    """Score of one hidden test file, e.g. 0.875; empty when the file had no tests."""
+    mine = [r for r in results if r["file"] == f"tests/{file}" and r["outcome"] in ("passed", "failed", "error")]
+    return round(sum(r["outcome"] == "passed" for r in mine) / len(mine), 4) if mine else ""
 
 
 # ---------- one build ----------
@@ -89,11 +108,22 @@ async def run_one(scenario: benchmark.Scenario, system: str, label: str, run: in
         return sum(getattr(log, field) for log in state.logs if agent in (None, log.agent))
 
     not_passed = [r["name"] for r in verdict["results"] if r["outcome"] in ("failed", "error")]
+    all_passed = verdict["total"] > 0 and verdict["passed"] == verdict["total"]
+    crashes = ""
+    if FUZZ and state.build_ok:
+        from agents import schema_check
+        crashes = len((await schema_check.check(ws / "app"))["crashes"])
     row.update(
+        hidden_contract=category_score(verdict["results"], "test_contract.py"),
+        hidden_generic=category_score(verdict["results"], "test_hidden_generic.py"),
+        hidden_rules=category_score(verdict["results"], "test_hidden_rules.py"),
+        false_ok=bool(state.tests_ok) and not all_passed,
+        searches=sum(log.action == "search_patterns" for log in state.logs), crashes=crashes,
+        single_tokens=int(total("tokens", "single")),
         build_ok=state.build_ok, tests_ok="" if state.tests_ok is None else state.tests_ok,
         tester_tests=len(state.test_results), fix_rounds=sum(log.action == "fix_round" for log in state.logs),
         hidden_passed=verdict["passed"], hidden_total=verdict["total"], hidden_score=round(verdict["score"], 4),
-        all_passed=verdict["total"] > 0 and verdict["passed"] == verdict["total"],
+        all_passed=all_passed,
         tokens=int(total("tokens")), cost_usd=round(total("cost_usd"), 4), seconds=round(time.time() - start, 1),
         coder_tokens=int(total("tokens", "coder")), tester_tokens=int(total("tokens", "tester")),
         # No test ran at all (e.g. the app cannot even be imported): a score of 0, not an error to retry.
@@ -154,12 +184,21 @@ def summary(rows: list[dict]) -> list[dict]:
             "label": label, "model": mine[0]["model"], "builds": n,
             "all_passed": sum(r["all_passed"] in (True, "True") for r in mine),
             "hidden_score": round(sum(float(r["hidden_score"]) for r in mine) / n, 3),
+            **{k: avg(mine, k) for k in ("hidden_contract", "hidden_generic", "hidden_rules")},
+            "false_ok": sum(r.get("false_ok") in (True, "True") for r in mine),
+            "searches": round(sum(int(r.get("searches") or 0) for r in mine) / n, 1),
+            "crashes": avg(mine, "crashes"),
             "fix_rounds": sum(int(r["fix_rounds"]) for r in mine),
             "tokens_per_build": round(sum(int(r["tokens"]) for r in mine) / n),
             "cost_usd": round(sum(float(r["cost_usd"]) for r in mine), 2),
             "seconds_per_build": round(sum(float(r["seconds"]) for r in mine) / n),
         })
     return table
+
+
+def avg(rows: list[dict], key: str):
+    values = [float(r[key]) for r in rows if r.get(key) not in (None, "")]
+    return round(sum(values) / len(values), 3) if values else ""
 
 
 def as_text(table: list[dict]) -> str:
@@ -180,7 +219,10 @@ def main() -> None:
     parser.add_argument("--parallel", type=int, default=3)
     parser.add_argument("--out", type=Path, default=RESULTS)
     parser.add_argument("--summary", action="store_true", help="only print the table from the CSV")
+    parser.add_argument("--fuzz", action="store_true", help="also fuzz each build with Schemathesis (count crashes)")
     args = parser.parse_args()
+    global FUZZ
+    FUZZ = args.fuzz
     if not args.summary:
         if not args.label:
             parser.error("--label is required to run builds")
