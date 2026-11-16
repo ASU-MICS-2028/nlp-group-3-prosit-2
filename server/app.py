@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from core import sdk
 from core.codemap import code_map
 from core.events import Event
 from core.state import Message, ProjectState
@@ -699,7 +700,7 @@ def stubbed(s: Session) -> bool:
 
 
 def _settings(s: Session) -> dict:
-    return {"model": "stub agents" if stubbed(s) else os.getenv("LLM_MODEL", "stub agents"),
+    return {"model": "stub agents" if stubbed(s) or orchestrator.STUB_REQUIREMENTS else sdk.MODEL,
             "sandbox": os.getenv("SANDBOX", "docker"), "user_name": s.user_name,
             "gate": bool(os.getenv("REAL_AGENTS_PASSWORD")), "unlocked": s.unlocked}
 
