@@ -186,6 +186,7 @@ First finding: every API the Coder has built so far crashes when an id is larger
 | Fixed generated stack: FastAPI + stdlib `sqlite3` | Fewer choices make the coder more reliable. FastAPI gives Swagger for free. `sqlite3` needs no extra package, so the sandbox still needs no network. |
 | Read-only code, no-network check sandbox | Generated code can't call out, modify itself at runtime, or touch the host. |
 | SQLite on a separate writable volume | Data survives restarts, and `data/` is the only writable place. |
+| TF-IDF vectors for RAG, not a neural embedding model | The library is small and full of exact names (`HTTPException`, `lastrowid`, `409`) that word matching finds reliably. No model download, API key or network; the same query always gives the same result, so retrieval can be unit-tested. |
 | Tests written from the spec; Coder can't edit them | Stops the Coder from "passing" by changing the tests. |
 | Finish gate in code, not just in the prompt | The model can't declare itself done without passing checks. |
 | Web app only, no desktop version | One codebase that runs locally now and can be hosted online later without changes to the UI. |
