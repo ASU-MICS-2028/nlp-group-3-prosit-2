@@ -27,6 +27,7 @@ from core.sdk import MODEL
 from core.spec import Spec
 from core.state import Message, ProjectState
 from eval import spec_compare
+from core import sandbox
 from server import stubs
 
 ROOT = Path(__file__).resolve().parent
@@ -109,7 +110,7 @@ async def approve(state: ProjectState, auto: bool) -> ProjectState:
 async def deliver(state: ProjectState, keep_serving: bool) -> None:
     """Start the API like the gateway does: it must answer GET /health, or it is refused."""
     try:
-        handle = await stubs.serve(state.workspace, "")
+        handle = await sandbox.serve(state.workspace, "")
     except RuntimeError as e:
         print(f"\nThe API did not start: {e}")
         return
@@ -121,7 +122,7 @@ async def deliver(state: ProjectState, keep_serving: bool) -> None:
             print("Ctrl+C to stop.")
             await asyncio.Event().wait()
     finally:
-        stubs.stop(handle)
+        sandbox.stop(handle)
 
 
 async def run(first: str, answer, auto: bool, workspace: Path, serve: str = "check") -> ProjectState:
