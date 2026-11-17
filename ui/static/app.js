@@ -499,6 +499,8 @@ function renderActivity() {
 // ---------- run: try the API in plain language ----------
 const human = s => String(s).replace(/_id$/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 const ROLE_LABEL = { public: 'Anyone', user: 'Signed-in user', admin: 'Admin' };
+const ROLES = ['public', 'user', 'admin'];   // what the generated API's X-Role check accepts
+const tryRole = ep => ROLES.includes(tryState.roles[tryState.ep]) ? tryState.roles[tryState.ep] : ep.access;
 function verb(ep) {
   if (ep.method === 'GET') return 'View';
   if (ep.method === 'DELETE') return 'Delete';
@@ -527,6 +529,31 @@ function paramInput(ep, p) {
   return `<div class="field"><label>${label}</label><input type="text" data-f="${key}" value="${esc(tryState.values[key] ?? '1')}"></div>`;
 }
 
+// The design has no place for query parameters (?q=...), but the built app describes itself in
+// /openapi.json. Start the test copy once per build and read its parameters from there.
+const apiDoc = { key: null, doc: null };
+async function loadApiDoc() {
+  const key = S.state.workspace + ':' + S.state.logs.length;
+  if (apiDoc.key === key || !S.state.build_ok) return;
+  apiDoc.key = key; apiDoc.doc = null;
+  try {
+    if (!S.server) S = await api('/api/run', { method: 'POST' });
+    apiDoc.doc = await (await fetch(S.server.url + '/openapi.json')).json();
+  } catch { return; }
+  if (view === 'run') renderRun();
+}
+function queryParams(ep) {
+  const norm = p => p.replace(/\{[^}]*\}/g, '{}').replace(/\/$/, '');
+  const hit = Object.entries(apiDoc.doc?.paths || {}).find(([p]) => norm(p) === norm(ep.path));
+  return (hit?.[1]?.[ep.method.toLowerCase()]?.parameters || []).filter(p => p.in === 'query');
+}
+function queryInput(p) {
+  const key = `${tryState.ep}:?${p.name}`, number = ['integer', 'number'].includes(p.schema?.type);
+  const name = ['q', 'query', 'search', 'term'].includes(p.name.toLowerCase()) ? 'Search' : human(p.name);
+  return `<div class="field"><label>${esc(name)}${p.required ? '' : ' <span class="opt">(optional)</span>'}</label>
+    <input type="text" data-f="${key}" value="${esc(tryState.values[key] ?? '')}" placeholder="${number ? 'A number' : 'Type to search or filter'}"></div>`;
+}
+
 function renderRun() {
   const focus = document.activeElement?.closest('#view-run') ? document.activeElement : null;
   const keep = focus && { id: focus.id, f: focus.dataset.f, start: focus.selectionStart, end: focus.selectionEnd };
@@ -543,10 +570,11 @@ function renderRunInner() {
   }
   const ep = eps[tryState.ep] || eps[0];
   const params = [...ep.path.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
-  const role = tryState.roles[tryState.ep] ?? ep.access;
+  const role = tryRole(ep);
   const groups = {};
   eps.forEach((e, i) => (groups[e.entity || 'Other'] ||= []).push(i));
-  const roles = ['public', ...(st.spec.roles || ['user', 'admin'])];
+  const roles = ROLES;
+  loadApiDoc();
   const pub = S.published;
   $('#view-run').innerHTML = `
     <div class="panel-head">Try it <span class="sub">see what your app does</span>
@@ -572,6 +600,7 @@ function renderRunInner() {
             `<button class="${r === role ? 'on' : ''}" data-role="${r}">${esc(ROLE_LABEL[r] || human(r))}</button>`).join('')}</div></div>
           ${role !== 'public' ? `<div class="field narrow"><label>User number</label><input id="try-uid" value="${esc(tryState.uid)}"></div>` : ''}
           ${params.map(p => paramInput(ep, p)).join('')}
+          ${queryParams(ep).map(queryInput).join('')}
           ${ep.request_fields.map(n => fieldInput(ep, n)).join('')}
           <div class="row"><button class="btn primary big" id="try-send" ${tryState.sending ? 'disabled' : ''}>${icon('send')}${
             tryState.sending ? (srv ? 'Trying...' : 'Starting your app...') : 'Try it'}</button></div>
@@ -698,7 +727,13 @@ async function sendTry() {
   let path = ep.path;
   for (const m of ep.path.matchAll(/\{(\w+)\}/g))
     path = path.replace(m[0], encodeURIComponent(tryState.values[`${tryState.ep}:${m[0]}`] ?? '1'));
-  const role = tryState.roles[tryState.ep] ?? ep.access;
+  const query = new URLSearchParams();
+  for (const q of queryParams(ep)) {
+    const v = tryState.values[`${tryState.ep}:?${q.name}`];
+    if (v !== undefined && v !== '') query.set(q.name, v);
+  }
+  if ([...query].length) path += '?' + query;
+  const role = tryRole(ep);
   const headers = role === 'public' ? {} : { 'X-Role': role, 'X-User-Id': tryState.uid };
   const hasBody = ep.request_fields.length > 0;
   const body = hasBody ? JSON.stringify(collectBody(ep)) : undefined;
