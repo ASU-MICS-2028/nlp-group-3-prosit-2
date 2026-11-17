@@ -1,0 +1,156 @@
+{
+ "project_name": "Event Tickets",
+ "description": "An organiser lists events and people get tickets while places last.",
+ "roles": [
+  "user",
+  "admin"
+ ],
+ "entities": [
+  {
+   "name": "Event",
+   "description": "Something people attend.",
+   "fields": [
+    {
+     "name": "name",
+     "type": "str"
+    },
+    {
+     "name": "starts_at",
+     "type": "datetime"
+    },
+    {
+     "name": "capacity",
+     "type": "int"
+    },
+    {
+     "name": "status",
+     "type": "str",
+     "read_only": true,
+     "description": "scheduled or cancelled"
+    }
+   ]
+  },
+  {
+   "name": "Ticket",
+   "description": "One place at an event.",
+   "belongs_to": [
+    "Event"
+   ],
+   "fields": [
+    {
+     "name": "event_id",
+     "type": "int"
+    },
+    {
+     "name": "holder_name",
+     "type": "str"
+    },
+    {
+     "name": "status",
+     "type": "str",
+     "read_only": true,
+     "description": "valid or cancelled"
+    }
+   ]
+  }
+ ],
+ "endpoints": [
+  {
+   "method": "POST",
+   "path": "/events",
+   "summary": "Add an event",
+   "entity": "Event",
+   "access": "admin",
+   "request_fields": [
+    "name",
+    "starts_at",
+    "capacity"
+   ],
+   "status_code": 201
+  },
+  {
+   "method": "GET",
+   "path": "/events",
+   "summary": "List events",
+   "entity": "Event",
+   "access": "public",
+   "status_code": 200
+  },
+  {
+   "method": "GET",
+   "path": "/events/{id}",
+   "summary": "Get an event",
+   "entity": "Event",
+   "access": "public",
+   "status_code": 200
+  },
+  {
+   "method": "PUT",
+   "path": "/events/{id}",
+   "summary": "Update an event",
+   "entity": "Event",
+   "access": "admin",
+   "request_fields": [
+    "name",
+    "starts_at",
+    "capacity"
+   ],
+   "status_code": 200
+  },
+  {
+   "method": "POST",
+   "path": "/tickets",
+   "summary": "Get a ticket",
+   "entity": "Ticket",
+   "access": "user",
+   "request_fields": [
+    "event_id",
+    "holder_name"
+   ],
+   "status_code": 201
+  },
+  {
+   "method": "GET",
+   "path": "/tickets",
+   "summary": "List all tickets",
+   "entity": "Ticket",
+   "access": "admin",
+   "status_code": 200
+  },
+  {
+   "method": "GET",
+   "path": "/tickets/{id}",
+   "summary": "Get a ticket",
+   "entity": "Ticket",
+   "access": "user",
+   "status_code": 200
+  },
+  {
+   "method": "POST",
+   "path": "/tickets/{id}/cancel",
+   "summary": "Cancel a ticket (kept with status cancelled)",
+   "entity": "Ticket",
+   "access": "user",
+   "status_code": 200
+  },
+  {
+   "method": "POST",
+   "path": "/events/{id}/cancel",
+   "summary": "Cancel an event and all its tickets",
+   "entity": "Event",
+   "access": "admin",
+   "request_fields": [],
+   "status_code": 200
+  }
+ ],
+ "rules": [
+  "starts_at cannot be in the past; reject with 422.",
+  "capacity must be at least 1; reject with 422.",
+  "A new ticket has status valid.",
+  "An event cannot have more valid tickets than its capacity; when it is full, a new ticket returns 409.",
+  "Cancelling sets status to cancelled and frees the place; tickets are never deleted. Cancelling a ticket that is already cancelled returns 409.",
+  "event_id must refer to an existing event; otherwise 404.",
+  "A new event has status scheduled. Cancelling an event sets its status to cancelled and the status of all its valid tickets to cancelled. Cancelling an event that is already cancelled returns 409.",
+  "A ticket for a cancelled event cannot be created; reject with 409."
+ ]
+}

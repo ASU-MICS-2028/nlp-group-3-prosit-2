@@ -1,0 +1,1 @@
+I want to run promotions. Let me put a discount from 0 to 90 percent on a product, and orders for that product should be charged the discounted price. Products without a discount work as before.

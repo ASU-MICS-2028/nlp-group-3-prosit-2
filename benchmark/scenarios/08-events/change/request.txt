@@ -1,0 +1,1 @@
+Sometimes we have to call off an event. Let an admin cancel an event: every ticket for it should be cancelled too, and nobody should be able to get a new ticket for it.

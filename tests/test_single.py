@@ -68,3 +68,53 @@ def test_build_single_uses_one_agent_and_logs_it(tmp_path, monkeypatch):
     monkeypatch.setitem(O.AGENTS, "single", fake_single)
     asyncio.run(O.build_single(ProjectState(requirements=REQ, workspace=str(tmp_path)), emit))
     assert calls == ["single"] and (tmp_path / "steps.jsonl").exists()
+
+
+def test_spec_mode_gets_the_teams_tools_and_is_judged_by_our_code(tmp_path):
+    """Comparison mode: same spec, the Coder's and Tester's tools, writes app/ and tests/; verdicts from our code."""
+    import pathlib
+    import shutil
+    from core.spec import Spec
+    golden = pathlib.Path(__file__).resolve().parent.parent / "golden" / "clinic"
+    spec = Spec.model_validate_json((golden / "spec.json").read_text())
+    seen = {}
+
+    async def fake_runner(system, prompt, tools, max_turns, max_usd, workspace, writable):
+        seen.update(system=system, prompt=prompt, tools=list(tools), writable=writable, max_usd=max_usd)
+        ws = pathlib.Path(workspace)
+        assert "Refused" in await tools["finish_build"][2]({})            # the finish gate holds
+        shutil.copytree(golden / "app", ws / "app", dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
+        (ws / "tests" / "test_api.py").write_text(   # what the agent would write: tests on the `client` fixture
+            "def test_doctors_are_public(client):\n    assert client.get('/doctors').status_code == 200\n")
+        seen["checks"] = await tools["run_checks"][2]({})
+        seen["tests"] = await tools["run_tests"][2]({})
+        seen["finish"] = await tools["finish_build"][2]({})
+        return {"tokens": 900, "cost_usd": 0.3}
+
+    st = ProjectState(spec=spec, spec_approved=True, workspace=str(tmp_path))
+    st = asyncio.run(single.run(st, emit, runner=fake_runner))
+    assert sorted(seen["tools"]) == ["finish_build", "run_checks", "run_tests", "search_patterns"]
+    assert seen["writable"] == ("app", "tests") and seen["max_usd"] == 1.5
+    assert "<spec>" in seen["prompt"] and "Build tasks:" in seen["prompt"]
+    assert "One behaviour per test" in seen["system"] and "GET /health is not in the spec" in seen["system"]
+    assert "All checks passed" in seen["checks"] and "passed" in seen["tests"] and "accepted" in seen["finish"]
+    assert st.build_ok and st.tests_ok and st.test_results
+    assert [l.action for l in st.logs if l.agent == "single"][-1] == "finish" and st.logs[-1].tokens == 900
+
+
+def test_spec_mode_updates_existing_code_for_a_change_request(tmp_path):
+    """Change benchmark: with app/ already built, it gets the Coder's change wording and the request."""
+    import pathlib
+    from core.spec import Spec
+    golden = pathlib.Path(__file__).resolve().parent.parent / "golden" / "clinic"
+    (tmp_path / "app").mkdir(); (tmp_path / "app" / "main.py").write_text("app = None\n")
+    seen = {}
+
+    async def fake_runner(system, prompt, tools, **kw):
+        seen["prompt"] = prompt
+        return {}
+    st = ProjectState(spec=Spec.model_validate_json((golden / "spec.json").read_text()), spec_approved=True,
+                      workspace=str(tmp_path), change_request="Let patients reschedule")
+    asyncio.run(single.run(st, emit, runner=fake_runner))
+    assert "app/ already holds the code" in seen["prompt"] and "<change_request>\nLet patients reschedule" in seen["prompt"]
+    assert (tmp_path / "app" / "main.py").read_text() == "app = None\n"   # its code is kept, not wiped

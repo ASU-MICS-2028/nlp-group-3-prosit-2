@@ -1,0 +1,1 @@
+Categories should be able to have an optional monthly budget. Also, the summary should show how much was spent in each category, not just the overall total.

@@ -1,0 +1,200 @@
+{
+ "project_name": "Guest House Bookings",
+ "description": "A guest house takes room bookings and handles check-in and check-out.",
+ "roles": [
+  "user",
+  "admin"
+ ],
+ "entities": [
+  {
+   "name": "Room",
+   "description": "A room guests can stay in.",
+   "fields": [
+    {
+     "name": "number",
+     "type": "str",
+     "unique": true
+    },
+    {
+     "name": "nightly_rate",
+     "type": "float"
+    },
+    {
+     "name": "max_guests",
+     "type": "int"
+    },
+    {
+     "name": "out_of_service",
+     "type": "bool",
+     "required": false,
+     "description": "false when not given"
+    }
+   ]
+  },
+  {
+   "name": "Booking",
+   "description": "A stay in a room.",
+   "belongs_to": [
+    "Room"
+   ],
+   "fields": [
+    {
+     "name": "room_id",
+     "type": "int"
+    },
+    {
+     "name": "guest_name",
+     "type": "str"
+    },
+    {
+     "name": "guests",
+     "type": "int"
+    },
+    {
+     "name": "check_in",
+     "type": "date"
+    },
+    {
+     "name": "check_out",
+     "type": "date"
+    },
+    {
+     "name": "total",
+     "type": "float",
+     "read_only": true,
+     "description": "number of nights x the room's nightly_rate"
+    },
+    {
+     "name": "status",
+     "type": "str",
+     "read_only": true,
+     "description": "booked, checked_in, checked_out or cancelled"
+    }
+   ]
+  }
+ ],
+ "endpoints": [
+  {
+   "method": "POST",
+   "path": "/rooms",
+   "summary": "Add a room",
+   "entity": "Room",
+   "access": "admin",
+   "request_fields": [
+    "number",
+    "nightly_rate",
+    "max_guests"
+   ],
+   "status_code": 201
+  },
+  {
+   "method": "GET",
+   "path": "/rooms",
+   "summary": "List rooms",
+   "entity": "Room",
+   "access": "public",
+   "status_code": 200
+  },
+  {
+   "method": "GET",
+   "path": "/rooms/{id}",
+   "summary": "Get a room",
+   "entity": "Room",
+   "access": "public",
+   "status_code": 200
+  },
+  {
+   "method": "PATCH",
+   "path": "/rooms/{id}",
+   "summary": "Change a room's rate or size",
+   "entity": "Room",
+   "access": "admin",
+   "request_fields": [
+    "nightly_rate",
+    "max_guests",
+    "out_of_service"
+   ],
+   "status_code": 200
+  },
+  {
+   "method": "POST",
+   "path": "/bookings",
+   "summary": "Book a room",
+   "entity": "Booking",
+   "access": "user",
+   "request_fields": [
+    "room_id",
+    "guest_name",
+    "guests",
+    "check_in",
+    "check_out"
+   ],
+   "status_code": 201
+  },
+  {
+   "method": "GET",
+   "path": "/bookings",
+   "summary": "List all bookings",
+   "entity": "Booking",
+   "access": "admin",
+   "status_code": 200
+  },
+  {
+   "method": "GET",
+   "path": "/bookings/{id}",
+   "summary": "Get a booking",
+   "entity": "Booking",
+   "access": "user",
+   "status_code": 200
+  },
+  {
+   "method": "PATCH",
+   "path": "/bookings/{id}",
+   "summary": "Change a booking's dates or number of guests",
+   "entity": "Booking",
+   "access": "user",
+   "request_fields": [
+    "guests",
+    "check_in",
+    "check_out"
+   ],
+   "status_code": 200
+  },
+  {
+   "method": "POST",
+   "path": "/bookings/{id}/checkin",
+   "summary": "Check the guest in",
+   "entity": "Booking",
+   "access": "admin",
+   "status_code": 200
+  },
+  {
+   "method": "POST",
+   "path": "/bookings/{id}/checkout",
+   "summary": "Check the guest out",
+   "entity": "Booking",
+   "access": "admin",
+   "status_code": 200
+  },
+  {
+   "method": "POST",
+   "path": "/bookings/{id}/cancel",
+   "summary": "Cancel a booking (kept with status cancelled)",
+   "entity": "Booking",
+   "access": "user",
+   "status_code": 200
+  }
+ ],
+ "rules": [
+  "nightly_rate must be greater than 0 and max_guests at least 1; reject with 422.",
+  "guests must be at least 1 and at most the room's max_guests; otherwise reject with 422.",
+  "check_out must be after check_in, and check_in cannot be in the past; otherwise reject with 422.",
+  "A room cannot have two bookings with status booked or checked_in whose nights overlap; reject with 409. A booking that checks in on the day another checks out does not overlap.",
+  "A new booking has status booked. total is the number of nights between check_in and check_out multiplied by the room's nightly_rate.",
+  "Only a booking with status booked can be changed with PATCH; otherwise 409. The rules above apply to the new values (a booking never clashes with itself), and total is worked out again from the new dates and the room's current nightly_rate.",
+  "checkin moves a booking from booked to checked_in; checkout moves it from checked_in to checked_out; cancel moves it from booked to cancelled. Any other status change returns 409.",
+  "Bookings that are cancelled or checked_out no longer block the room. Bookings are never deleted.",
+  "room_id must refer to an existing room; otherwise 404.",
+  "A new room has out_of_service false. A room that is out_of_service cannot get new bookings; reject with 409. Existing bookings are not changed."
+ ]
+}
