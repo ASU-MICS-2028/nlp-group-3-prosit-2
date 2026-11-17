@@ -100,3 +100,21 @@ def test_spec_mode_gets_the_teams_tools_and_is_judged_by_our_code(tmp_path):
     assert "All checks passed" in seen["checks"] and "passed" in seen["tests"] and "accepted" in seen["finish"]
     assert st.build_ok and st.tests_ok and st.test_results
     assert [l.action for l in st.logs if l.agent == "single"][-1] == "finish" and st.logs[-1].tokens == 900
+
+
+def test_spec_mode_updates_existing_code_for_a_change_request(tmp_path):
+    """Change benchmark: with app/ already built, it gets the Coder's change wording and the request."""
+    import pathlib
+    from core.spec import Spec
+    golden = pathlib.Path(__file__).resolve().parent.parent / "golden" / "clinic"
+    (tmp_path / "app").mkdir(); (tmp_path / "app" / "main.py").write_text("app = None\n")
+    seen = {}
+
+    async def fake_runner(system, prompt, tools, **kw):
+        seen["prompt"] = prompt
+        return {}
+    st = ProjectState(spec=Spec.model_validate_json((golden / "spec.json").read_text()), spec_approved=True,
+                      workspace=str(tmp_path), change_request="Let patients reschedule")
+    asyncio.run(single.run(st, emit, runner=fake_runner))
+    assert "app/ already holds the code" in seen["prompt"] and "<change_request>\nLet patients reschedule" in seen["prompt"]
+    assert (tmp_path / "app" / "main.py").read_text() == "app = None\n"   # its code is kept, not wiped

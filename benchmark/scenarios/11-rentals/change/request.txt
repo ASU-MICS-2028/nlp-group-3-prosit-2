@@ -1,0 +1,1 @@
+Customers often want to keep the car longer. Let them extend a rental to a later end date, as long as the car isn't already booked by someone else for those days. The price should be updated. Returned rentals can't be extended.

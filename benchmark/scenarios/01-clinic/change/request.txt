@@ -1,0 +1,1 @@
+Patients should be able to move an appointment to a different time instead of cancelling it. The usual rules still apply: no times in the past and no double booking for the doctor. A cancelled appointment can't be moved.

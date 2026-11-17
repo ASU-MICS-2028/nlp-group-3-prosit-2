@@ -7,7 +7,13 @@
     python -m eval.run --label team --scenarios 05-shop 16-hotel --repeat 3
     python -m eval.run --label single --system single    # one agent, same spec, same tools and budget
     python -m eval.run --label team --fuzz               # also fuzz each build with Schemathesis (crashes)
+    python -m eval.run --label team-change --system team --change   # change requests (below)
     python -m eval.run --summary                         # print the table from the CSV, run nothing
+
+--change: the change-request benchmark, on the scenarios that have a change/ folder. The system
+builds the scenario, then gets the follow-up request with the changed spec (approved) and updates
+its own code. Judged with the changed spec: hidden_change = the new feature, hidden_rules = the
+original rules still holding (regressions), base_all_passed = how the first build did.
 
 One row is written per build, as soon as it finishes, so a run that stops half-way loses nothing
 and running the same label again skips what is already there.
@@ -46,9 +52,10 @@ RESULTS = ROOT / "eval" / "results" / "results.csv"
 WORKSPACES = ROOT / "workspace" / "_eval"     # workspace/ is gitignored
 COLUMNS = ["label", "system", "model", "rag", "scenario", "run", "build_ok", "tests_ok", "tester_tests", "fix_rounds",
            "hidden_passed", "hidden_total", "hidden_score", "all_passed", "hidden_contract", "hidden_generic",
-           "hidden_rules", "false_ok", "searches", "crashes", "tokens", "cost_usd", "seconds",
+           "hidden_rules", "hidden_change", "base_all_passed", "false_ok", "searches", "crashes", "tokens", "cost_usd", "seconds",
            "coder_tokens", "tester_tokens", "single_tokens", "failed", "error"]
 FUZZ = False   # --fuzz: also run Schemathesis on every build (no model calls, but slower)
+CHANGE = False   # --change: build, then apply the scenario's change request (see above)
 
 
 async def no_events(event) -> None:
@@ -97,9 +104,16 @@ async def run_one(scenario: benchmark.Scenario, system: str, label: str, run: in
     row.update(label=label, system=system, model=sdk.MODEL, rag=os.getenv("RAG", "on"), scenario=scenario.name, run=run)
     state = ProjectState(spec=scenario.spec, spec_approved=True, workspace=str(ws))
     start = time.time()
+    change = benchmark.load_change(scenario) if CHANGE else None
     try:
         state = await SYSTEMS[system](state)
-        verdict = await benchmark.judge(scenario, ws / "app")
+        if change:   # the follow-up request, on the code this system just built
+            base = await benchmark.judge(scenario, ws / "app")
+            row["base_all_passed"] = base["total"] > 0 and base["passed"] == base["total"]
+            state.spec, state.spec_approved = change.spec, True
+            state.change_request, state.change_files = change.request, []
+            state = await SYSTEMS[system](state)
+        verdict = await benchmark.judge(scenario, ws / "app", change)
     except Exception as e:                     # e.g. the model could not be reached
         row.update(error=f"{type(e).__name__}: {e}"[:300], seconds=round(time.time() - start, 1))
         return row
@@ -117,6 +131,7 @@ async def run_one(scenario: benchmark.Scenario, system: str, label: str, run: in
         hidden_contract=category_score(verdict["results"], "test_contract.py"),
         hidden_generic=category_score(verdict["results"], "test_hidden_generic.py"),
         hidden_rules=category_score(verdict["results"], "test_hidden_rules.py"),
+        hidden_change=category_score(verdict["results"], "test_hidden_change.py"),
         false_ok=bool(state.tests_ok) and not all_passed,
         searches=sum(log.action == "search_patterns" for log in state.logs), crashes=crashes,
         single_tokens=int(total("tokens", "single")),
@@ -153,7 +168,8 @@ def append(path: Path, row: dict) -> None:
 async def run_all(label: str, system: str, names: list[str], repeat: int, parallel: int, path: Path) -> list[dict]:
     """Run every (scenario, run) for this label that the CSV does not have yet, `parallel` at a time."""
     done = {(r["scenario"], int(r["run"])) for r in read(path) if r["label"] == label and not r["error"]}
-    todo = [(s, n) for s in benchmark.scenarios() if not names or s.name in names
+    todo = [(s, n) for s in benchmark.scenarios() if (not names or s.name in names)
+            and (not CHANGE or benchmark.load_change(s))
             for n in range(1, repeat + 1) if (s.name, n) not in done]
     limit, rows = asyncio.Semaphore(parallel), []
 
@@ -184,7 +200,7 @@ def summary(rows: list[dict]) -> list[dict]:
             "label": label, "model": mine[0]["model"], "builds": n,
             "all_passed": sum(r["all_passed"] in (True, "True") for r in mine),
             "hidden_score": round(sum(float(r["hidden_score"]) for r in mine) / n, 3),
-            **{k: avg(mine, k) for k in ("hidden_contract", "hidden_generic", "hidden_rules")},
+            **{k: avg(mine, k) for k in ("hidden_contract", "hidden_generic", "hidden_rules", "hidden_change")},
             "false_ok": sum(r.get("false_ok") in (True, "True") for r in mine),
             "searches": round(sum(int(r.get("searches") or 0) for r in mine) / n, 1),
             "crashes": avg(mine, "crashes"),
@@ -220,9 +236,10 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=RESULTS)
     parser.add_argument("--summary", action="store_true", help="only print the table from the CSV")
     parser.add_argument("--fuzz", action="store_true", help="also fuzz each build with Schemathesis (count crashes)")
+    parser.add_argument("--change", action="store_true", help="change-request benchmark: build, then apply the change")
     args = parser.parse_args()
-    global FUZZ
-    FUZZ = args.fuzz
+    global FUZZ, CHANGE
+    FUZZ, CHANGE = args.fuzz, args.change
     if not args.summary:
         if not args.label:
             parser.error("--label is required to run builds")

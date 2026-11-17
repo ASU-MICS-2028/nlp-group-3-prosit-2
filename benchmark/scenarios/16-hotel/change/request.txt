@@ -1,0 +1,1 @@
+Sometimes a room needs repairs. Let me mark a room as out of service (and back again). While it's out of service nobody can book it, but bookings it already has stay as they are.

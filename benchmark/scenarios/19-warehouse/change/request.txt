@@ -1,0 +1,1 @@
+Give each item a reorder level, and add a list of the items that are running low: the ones whose total stock across all warehouses is below their reorder level.

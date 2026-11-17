@@ -1,0 +1,1 @@
+Let members renew a loan once. Renewing gives them 14 more days. A loan that was already renewed or already returned can't be renewed.
