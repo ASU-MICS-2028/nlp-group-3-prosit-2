@@ -279,9 +279,9 @@ a { color: var(--accent-ink); }
 .entity b { font-weight: 600; }
 .entity span { color: var(--muted); font-size: 13px; }
 .eps { display: flex; flex-direction: column; gap: 5px; }
-.eps .e { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
-.eps .e code { font: 12.5px var(--mono); }
-.eps .e .s { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.eps .e { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; font-size: 13px; }
+.eps .e code { font: 12.5px var(--mono); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.eps .e .s { color: var(--muted); flex-basis: 100%; order: 3; overflow-wrap: anywhere; }
 .eps .acc { font-size: 11px; color: var(--faint); }
 .rules { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
 .acard-foot { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
