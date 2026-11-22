@@ -889,10 +889,10 @@ function specCard(sp = S.state.spec, review = S.state.spec_approved === false, l
     <div class="acard-body">
       <p class="desc">${esc(sp.description)}</p>
       <h5>What it stores</h5>
-      ${sp.entities.map(e => `<div class="entity"><b>${esc(e.name)}</b> <span>${e.fields.map(f => esc(f.name)).join(', ')}</span></div>`).join('')}
+      ${sp.entities.map(e => `<div class="entity"><b>${esc(e.name)}</b> <span>${e.fields.map(f => esc(human(f.name))).join(', ')}</span></div>`).join('')}
       <h5>What it can do · ${sp.endpoints.length} endpoints</h5>
       <div class="eps">${sp.endpoints.map(e => `<div class="e"><span class="method m-${e.method}">${e.method}</span>
-        <code>${esc(e.path)}</code><span class="s">${esc(e.summary)}</span><span class="acc">${e.access}</span></div>`).join('')}</div>
+        <code>${esc(e.path)}</code><span class="s">${esc(e.summary)}</span><span class="acc">${esc(ROLE_LABEL[e.access] || human(e.access))}</span></div>`).join('')}</div>
       ${sp.rules.length ? `<h5>Rules</h5><ul class="rules">${sp.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
     </div>
     ${live && review && !S.busy ? `<div class="acard-foot"><button class="btn primary" id="approve">${icon('check')}Approve & build</button>
