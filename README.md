@@ -520,12 +520,12 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 ### Everyone
 
-- [ ] Teach your theory topic
-- [ ] Review a teammate's code each week
-- [ ] Present at the weekly teach-back
-- [ ] Write your own Section A
-- [ ] Present your part in the presentation
-- [ ] Be able to explain the whole system for the viva
+- [ ] Teach your theory topic (done: Henry)
+- [ ] Review a teammate's code each week (done: Henry)
+- [ ] Present at the weekly teach-back (done: Henry)
+- [ ] Write your own Section A (done: Henry)
+- [ ] Present your part in the presentation (done: Henry)
+- [ ] Be able to explain the whole system for the viva (done: Henry)
 
 ---
 
@@ -556,14 +556,14 @@ Fill in the dates once the deadline is confirmed.
 - [x] Day 1 agreements merged
 - [ ] Golden example updated to SQLite
 - [x] Walking skeleton runs end to end
-- [ ] Each part runs alone on the golden example
+- [ ] Each part runs alone on the golden example (done: Henry)
 - [x] Pairs connected
 - [x] Full pipeline runs end to end
 - [ ] Benchmark results ready
 - [ ] Usability test done
 - [ ] Security checklist done
-- [ ] Section A (×4), Section B and slides done (repo link on page 1 of both)
-- [ ] Demo rehearsed
+- [ ] Section A (×4), Section B and slides done (repo link on page 1 of both) (done: Henry)
+- [ ] Demo rehearsed (done: Henry)
 
 ---
 
