@@ -212,7 +212,7 @@ First finding: every API the Coder has built so far crashes when an id is larger
 | Filesystem | `--read-only`, `tmpfs` on `/tmp` | `--read-only`, `tmpfs` on `/tmp` |
 | Memory / CPU / PIDs | 512 MB / 1 CPU / 128 | 512 MB / 1 CPU / 128 |
 | User | Non-root (the host user's uid, so `data/` stays writable; never root), no capabilities | Same |
-| Time limit | 120 s per run | Stopped when the session ends or after an idle timeout |
+| Time limit | 120 s per run | None. Runs until it is stopped or replaced, or the gateway shuts down. Idle stop is a TODO (Role 3). |
 
 All of this lives in `core/sandbox.py`: `run()` for checks and tests, `serve()`/`stop()` for the running API. The image is `sandbox/Dockerfile` (pinned packages in `sandbox/requirements.txt`). The serve container mounts only `app/` (read-only) and `data/`, so the project's `state.json` and `tests/` never reach it. Containers are labelled `mesora.sandbox` and removed when the gateway starts, in case it crashed.
 
@@ -283,7 +283,7 @@ These are what let four people build separately and still fit together. **Changi
 
 ### Golden example
 
-`golden/clinic/` is a hand-written, known-good project: chat transcript, requirements, spec, FastAPI code with SQLite, and tests. Every role builds and tests their part against it first, so nobody waits for anybody.
+`golden/clinic/` is a hand-written, known-good project: chat transcript, requirements, spec, FastAPI code and tests. The code still stores data in memory; moving it to SQLite is a TODO (Role 3). Every role builds and tests their part against it first, so nobody waits for anybody.
 
 ---
 
@@ -359,7 +359,7 @@ PUBLISH_URL=http://{sub}.localhost:8000   # where published APIs live; hosted: h
 ### Run
 
 ```bash
-python -m server                            # web app at http://localhost:8000 (stub agents for now)
+python -m server                            # web app at http://localhost:8000 (real agents by default)
 python run.py --golden clinic               # full pipeline on the golden example (real agents)
 python run.py --golden clinic --stub        # the same, offline: stub agents replay the golden example
 python run.py "I run a small clinic..."     # full pipeline from a prompt, you answer in the terminal
@@ -384,10 +384,10 @@ The agents run on the Claude Agent SDK, which signs in the same way Claude Code 
 | Where | How | Why |
 | --- | --- | --- |
 | **Your laptop** (development, tests, benchmark runs, the live demo) | Your own Claude subscription: run `claude` once and log in. Usage counts against your plan's limits; no per-token charge | Your own work on your own machine is ordinary subscription use |
-| **The hosted site** (mesorablocks.online) | An API key (`ANTHROPIC_API_KEY` in Coolify). Until we have one, it runs with `REQUIREMENTS_AGENT=stub` (the golden replay) | Anthropic's terms: products that serve other people's requests must use API key authentication, not a subscription login (that includes `claude setup-token`) |
+| **The hosted site** (mesorablocks.online) | An API key (`ANTHROPIC_API_KEY` in Coolify). Until we have one, visitors get the stub agents (the golden replay) and only password-unlocked sessions run the real agents (see [Deploying](#deploying)) | Anthropic's terms: products that serve other people's requests must use API key authentication, not a subscription login (that includes `claude setup-token`) |
 
 - **`ANTHROPIC_API_KEY` wins.** If it is set in your environment, the SDK uses it and bills the API instead of your subscription. Keep it unset locally; `/status` in Claude Code shows which sign-in is active.
-- **No pay-as-you-go budget?** Max and Team plans include monthly API credits that can be claimed into a Claude Console organization and used through an API key (Pro does not). That is the way to switch the hosted site to the real agents without card billing: put the key in Coolify and delete `REQUIREMENTS_AGENT`. No code changes.
+- **No pay-as-you-go budget?** Max and Team plans include monthly API credits that can be claimed into a Claude Console organization and used through an API key (Pro does not). That is the way to move the hosted site's real agents from the subscription login to an API key without card billing: put the key in Coolify and delete `CLAUDE_CODE_OAUTH_TOKEN`. No code changes.
 - Each agent turn has a cost cap (`MAX_TURN_USD`, default $0.10), which also limits how fast a turn can use up plan limits.
 
 ### Keeping costs down
@@ -409,7 +409,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 
 **Set up**
 - [x] Write the golden chat transcript
-- [ ] Define the plain-English labels for the user-facing parts of the spec
+- [x] Define the plain-English labels for the user-facing parts of the spec
 
 **Build** (match the [sample UI](#sample-ui))
 - [x] Gateway: create session, post message, SSE event stream
@@ -506,7 +506,7 @@ Use Haiku for day-to-day work and Sonnet only for demos and benchmark runs. Keep
 - [x] RAG: pattern library (FastAPI + `sqlite3` patterns) and FastAPI docs, chunked and embedded
 - [x] `search_patterns` tool for the Coder (and the single agent, so the comparison is fair); each search is a build step
 - [x] Spec checking with Schemathesis (`agents/schema_check.py`; a separate check, not yet part of the build)
-- [ ] Evaluation script that saves results to CSV
+- [x] Evaluation script that saves results to CSV (`eval/run.py`)
 - [ ] Model comparison experiment (e.g. Haiku vs Sonnet)
 
 **Connect**
@@ -553,7 +553,7 @@ Fill in the dates once the deadline is confirmed.
 - [x] Hand-built prototype (archived as the baseline)
 - [x] Assign roles
 - [ ] Confirm the deadline and fill in milestone dates
-- [ ] Day 1 agreements merged
+- [x] Day 1 agreements merged
 - [ ] Golden example updated to SQLite
 - [x] Walking skeleton runs end to end
 - [ ] Each part runs alone on the golden example
@@ -614,7 +614,7 @@ Weekly teach-back: 10 minutes per owner, others ask viva-style questions. Sectio
 | Reasoning & planning | Architect produces the spec and build tasks before any code |
 | Decomposition | Spec split into per-resource build tasks |
 | Self-reflection | Tester failure reports send the Coder back into its loop; `run_checks` feedback |
-| Memory | `ProjectState` as shared memory; chat history and summaries; RAG pattern library |
+| Memory | `ProjectState` as shared memory; full chat history (summarising long chats is a TODO, Role 1); RAG pattern library |
 | Human-in-the-loop | Spec approval and change requests |
 | Coding agents | The Coder |
 | Privacy & security | Sandbox limits, permissions, path hooks, secret handling |
@@ -686,4 +686,4 @@ It stays useful in two ways: reading it shows what the SDK now does for us, and 
 - The serve sandbox does not yet block outbound network traffic.
 - `SANDBOX=local` gives no isolation.
 - Builds run one at a time per gateway at first.
-- The deployed app still uses stub agents, and generated APIs run as plain processes inside the app container until the serve sandbox lands.
+- The deployed app runs the stub agents for visitors (the real agents need the password), and generated APIs run as plain processes inside the app container (`SANDBOX=local`) until that container can reach a Docker daemon.
